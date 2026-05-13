@@ -1,0 +1,8 @@
+{
+  "modelVersion": "6.1.0",
+  "description": "ArcaneKey App",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.18"
+  }
+}

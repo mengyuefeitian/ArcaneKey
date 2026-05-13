@@ -1,0 +1,11 @@
+{
+  "modelVersion": "6.1.0",
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "ArcaneKey entry module",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {},
+  "devDependencies": {}
+}
