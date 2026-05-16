@@ -1,0 +1,19 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Private keys & credentials
+private.*.key
+*.pem
+*.p12
+secrets/
+.env
+.env.*
+
+# Planning & debug artifacts
+.planning/
+miniprogram/.planning/
+
+# WeChat DevTools generated
+miniprogram/node_modules/
+node_modules/
