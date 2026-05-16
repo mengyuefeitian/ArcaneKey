@@ -37,14 +37,7 @@ export const BRAND_COLORS: Record<string, string> = {
   'Steam': '#c6d4df', 'Netflix': '#E50914', 'Spotify': '#1DB954',
 };
 
-export const INITIAL_TOKENS: Token[] = [
-  { id: '1', brand: 'Google',    account: 'alice@gmail.com',   secret: 'JBSWY3DPEHPK3PXP' },
-  { id: '2', brand: 'Microsoft', account: 'alice@outlook.com', secret: 'MFRA22LDNRSXG5AP' },
-  { id: '3', brand: 'GitHub',    account: 'alicedev',          secret: 'NZXSAYLBNFXWY3DP' },
-  { id: '4', brand: 'Apple',     account: 'alice@icloud.com',  secret: 'OJSXI33PNZQXE5LN' },
-  { id: '5', brand: 'Stripe',    account: 'alice@company.com', secret: 'KRUGS4TANFXGK4TF' },
-  { id: '6', brand: 'Discord',   account: 'alice#0042',        secret: 'LBSWY3DPEHPK3PXP' },
-];
+export const INITIAL_TOKENS: Token[] = [];
 
 export const FREE_TOKEN_LIMIT: number = 5;
 export const MEMBERSHIP_PRICE: number = 19.90;
