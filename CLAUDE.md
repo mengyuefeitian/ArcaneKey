@@ -94,3 +94,207 @@ No tests, no CI/CD, no linter, no formatter, no package manager, no `.gitignore`
 - `2026-04-28-ui-fixes-and-features.md` — UI fixes (input clipping, nav redesign, WeChat/HarmonyOS login, profile branding)
 - `2026-04-29-bug-fixes.md` — web app bug fixes (nav clicks, edit modal layout, search box)
 - `2026-04-30-membership-and-feedback.md` — membership system, QR auto-add, cloud backup/sync, feedback
+
+<!-- GSD:project-start source:PROJECT.md -->
+## Project
+
+**星枢令 (ArcaneKey) — 小程序功能迭代**
+
+**星枢令**是一款跨平台 TOTP 身份验证器，已完成 v1.0 发布（微信小程序 + HarmonyOS）。
+
+本项目跟踪 v1.0 之后的**微信小程序功能迭代**，聚焦于提升用户传播与体验的增量改进。
+
+**核心价值：** 让用户能方便地把星枢令分享给朋友，扩大口碑传播。
+<!-- GSD:project-end -->
+
+<!-- GSD:stack-start source:codebase/STACK.md -->
+## Technology Stack
+
+## Overview
+## WeChat Mini Program (`miniprogram/`)
+### Runtime
+- **Platform:** WeChat Mini Program
+- **Language:** JavaScript (ES5/ES6 compatible)
+- **Runtime:** WeChat DevTools
+- **Cloud:** WeChat Cloud Development (`wx.cloud`)
+### Core Dependencies
+- No external npm dependencies
+- Pure JavaScript implementations for:
+### Configuration
+- `miniprogram/app.json` — Pages, window settings, cloud enabled
+- `miniprogram/project.config.json` — AppID, cloud environment ID
+- Cloud Environment ID: `cloud1-d6gv0hhga084dbe14`
+### Cloud Functions
+- `miniprogram/cloudfunctions/login/` — Login cloud function
+- `miniprogram/cloudfunctions/sendFeedback/` — Feedback email via nodemailer
+### WeChat APIs Used
+- `wx.cloud.init()` — Cloud initialization
+- `wx.cloud.database()` — Cloud database for backup
+- `wx.cloud.uploadFile()` — File upload
+- `wx.cloud.callFunction()` — Cloud function invocation
+- `wx.scanCode()` — QR code scanning
+- `wx.setClipboardData()` — Clipboard copy
+- `wx.getStorageSync()`/`wx.setStorageSync()` — Local storage
+- `wx.chooseMedia()` — Media selection
+## HarmonyOS App (`harmonyos/`)
+### Runtime
+- **Platform:** HarmonyOS 6.1 (API 23)
+- **Language:** ArkTS (TypeScript-like)
+- **IDE:** DevEco Studio
+- **Bundle ID:** `com.example.authenticator`
+### Core Dependencies
+- `@kit.BasicServicesKit` — Pasteboard (clipboard)
+- `@kit.AbilityKit` — Common context
+- `@kit.ScanKit` — QR scanning
+- `@kit.ArkData` — Preferences (storage)
+- Dev dependency: `@ohos/hypium` 1.0.18 (testing framework)
+### Configuration
+- `harmonyos/entry/src/main/module.json5` — Module config, abilities
+- `harmonyos/build-profile.json5` — Build configuration
+- `harmonyos/oh-package.json5` — Package manifest
+### Permissions Declared
+- `ohos.permission.SYSTEM_FLOAT_WINDOW` — Floating window
+## Cross-Platform Constants
+| Constant | Value | Files |
+|----------|-------|-------|
+| `THEMES` | 10 accent colors | `miniprogram/app.js`, `harmonyos/.../Token.ets` |
+| `BRAND_COLORS` | ~20 brand hex colors | `harmonyos/.../Token.ets` only (miniprogram inline) |
+| `INITIAL_TOKENS` | 6 demo tokens | Both files |
+| `FREE_TOKEN_LIMIT` | 5 | Both files |
+| `MEMBERSHIP_PRICE` | ¥19.90 | Both files |
+| `APP_NAME` | 玄钥 | Both files |
+## Security
+- XOR encryption for backup (not AES — demo level)
+- No secrets in source code
+- Cloud environment ID hardcoded in `app.js`
+- Privacy agreement pending (errno 112 errors)
+<!-- GSD:stack-end -->
+
+<!-- GSD:conventions-start source:CONVENTIONS.md -->
+## Conventions
+
+## Language & UI
+- **UI Language:** Chinese (中文)
+- **All labels, theme names, button text:** Chinese (e.g. 海洋蓝, 皇室紫, 扫一扫)
+- **Code comments:** Mixed Chinese/English
+- **Product name:** 玄钥 (ArcaneKey)
+## Code Style
+### WeChat Mini Program
+- **JavaScript:** ES5/ES6, no TypeScript
+- **Component pattern:** `Component({ properties, data, methods, observers, lifetimes })`
+- **Page pattern:** `Page({ data, onLoad, methods })`
+- **Event binding:** `bindtap`, `bindinput`, `bind:custom-event`
+- **State updates:** `this.setData({ key: value })`
+### HarmonyOS
+- **ArkTS:** TypeScript-like with decorators
+- **Component pattern:** `@Component struct Name { @State, build() }`
+- **Entry pattern:** `@Entry @Component struct Index`
+- **Builder pattern:** `@Builder function ModalName()`
+- **State updates:** Direct assignment to `@State` vars
+## Naming Patterns
+| Context | Pattern | Example |
+|---------|---------|---------|
+| Event handlers | `onXxx` | `onCopyTap`, `onEditToken` |
+| Internal methods | `_xxx` | `_updateOtpMap`, `_filterTokens` |
+| Data properties | camelCase | `timeLeft`, `accentColor`, `otpMap` |
+| WXML classes | kebab-case | `.card-bottom`, `.otp-digit` |
+| Components | kebab-case | `token-card`, `bottom-nav` |
+## Error Handling
+- **Toast notifications:** Custom toast component, not `wx.showToast`
+- **Error messages:** Chinese (e.g. "复制失败", "无法解析二维码")
+- **Fail callbacks:** Always show user feedback via toast
+## Styling Conventions
+### Color System
+- **Theme colors:** 10 accent colors in `THEMES` array
+- **Background:** Dark (`#0d0d12`, `#191920`)
+- **Text:** Light (`#eeeef5`, `rgba(238,238,245,0.xx)`)
+- **Brand colors:** Hardcoded map for popular brands
+### Layout
+- **Navigation:** Floating bottom bar, glassmorphism effect
+- **Cards:** Rounded corners (18px), dark backgrounds
+- **Spacing:** Consistent padding (14px, 16px, 20px)
+- **Radius:** Consistent (8px, 12px, 18px)
+## Data Patterns
+### TOTP Flow
+### Storage Keys
+| Key | Platform | Purpose |
+|-----|----------|---------|
+| `ak_tokens` | WeChat | Token array |
+| `ak_theme` | WeChat | Theme object |
+| `ak_membership` | Both | Membership status |
+| `arcankey_cloud` | HarmonyOS | Cloud backup |
+## Component Communication
+## Magic Numbers
+| Value | Context |
+|-------|---------|
+| 30 | TOTP cycle seconds |
+| 5 | Free token limit |
+| 19.90 | Membership price (¥) |
+| 6 | OTP code digits |
+| 3 | Max feedback images |
+<!-- GSD:conventions-end -->
+
+<!-- GSD:architecture-start source:ARCHITECTURE.md -->
+## Architecture
+
+## Pattern: Single-Page Conditional Rendering
+```
+```
+## WeChat Mini Program Structure
+```
+```
+### Data Flow
+```
+```
+### Timer Architecture
+- `setInterval(1000ms)` updates `timeLeft` in `index.js`
+- When `timeLeft === 30`: regenerate all OTP codes
+- Countdown-ring component receives `timeLeft` as prop
+## HarmonyOS Structure
+```
+```
+### Key Differences from WeChat
+- Views are `@Component` structs, not pages
+- Modals are `@Builder` functions in Index.ets
+- Navigation: custom floating capsule (not native)
+- State: ArkTS `@State` reactive system
+## Membership Architecture
+```
+```
+- WeChat: `wx.getStorageSync('ak_membership')`
+- HarmonyOS: Preferences `ak_membership`
+## Key Architectural Decisions
+| Decision | Rationale |
+|----------|-----------|
+| Single-page app | Simpler state management, no router complexity |
+| No shared code | Platform APIs are incompatible, duplication acceptable |
+| XOR encryption | Demo-level simplicity, not production security |
+| Canvas countdown | SVG unreliable in WeChat (failed 6 times) |
+| Inline modals | WeChat modal API limitations |
+<!-- GSD:architecture-end -->
+
+<!-- GSD:skills-start source:skills/ -->
+## Project Skills
+
+No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
+<!-- GSD:skills-end -->
+
+<!-- GSD:workflow-start source:GSD defaults -->
+## GSD Workflow Enforcement
+
+Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+
+Use these entry points:
+- `/gsd-quick` for small fixes, doc updates, and ad-hoc tasks
+- `/gsd-debug` for investigation and bug fixing
+- `/gsd-execute-phase` for planned phase work
+
+Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+<!-- GSD:workflow-end -->
+
+<!-- GSD:profile-start -->
+## Developer Profile
+
+> Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
+> This section is managed by `generate-claude-profile` -- do not edit manually.
+<!-- GSD:profile-end -->
