@@ -15,9 +15,11 @@
 
 **Goal:** 修复已知关键缺陷，建立完整的功能差异清单。
 
-**Plans:**
-1. **Fix: 权限与配置修复** — 添加相机权限、修正 Bundle ID、添加 .gitignore
-2. **Audit: 功能差异审计** — 对照小程序功能逐项核查鸿蒙实现，输出 FEATURE-AUDIT.md
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — 权限与配置修复（FIX-01 相机权限、FIX-02 Bundle ID、FIX-03 .gitignore）
+- [ ] 01-02-PLAN.md — 功能差异审计（对照小程序功能逐项核查鸿蒙实现，输出 FEATURE-AUDIT.md）
 
 **Success Criteria:**
 - [ ] `module.json5` 中 `ohos.permission.CAMERA` 已声明
