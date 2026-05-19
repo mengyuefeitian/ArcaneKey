@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# HarmonyOS 构建缓存 (DevEco Studio / hvigor)
+harmonyos/.hvigor/
+harmonyos/entry/build/
+harmonyos/build/
+
+# ohpm 依赖包 (等同 node_modules，不应提交)
+harmonyos/oh_modules/
+harmonyos/*/oh_modules/
+
+# IDE 生成文件 (DevEco Studio)
+harmonyos/.idea/.deveco/
+harmonyos/.idea/workspace.xml
+harmonyos/.idea/usage.statistics.xml
+
+# 本地签名配置
+harmonyos/local.properties
+
+# HarmonyOS 构建产物
+*.hap
+*.app
+*.har
+
+# WeChat 小程序构建产物
+miniprogram/miniprogram_npm/
+
+# 微信小程序私钥
+private.wx*.key

@@ -1,5 +1,5 @@
 import { Logo } from '../components/Logo';
-import { common } from '@kit.AbilityKit';
+import { common, abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 
 @Component
@@ -46,10 +46,28 @@ export struct ScanView {
     }
   }
 
+  private async requestCameraPermission(ctx: common.UIAbilityContext): Promise<boolean> {
+    const atManager = abilityAccessCtrl.createAtManager();
+    const permission: Permissions = 'ohos.permission.CAMERA';
+    try {
+      const result = await atManager.requestPermissionsFromUser(ctx, [permission]);
+      return result.authResults[0] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+    } catch (e) {
+      return false;
+    }
+  }
+
   private async doScan(enableAlbum: boolean): Promise<void> {
     this.scanning = true;
     try {
       const ctx = getContext(this) as common.UIAbilityContext;
+      const granted = await this.requestCameraPermission(ctx);
+      if (!granted) {
+        this.scanErrMsg = '需要相机权限才能扫码';
+        setTimeout(() => { this.scanErrMsg = ''; }, 2200);
+        this.scanning = false;
+        return;
+      }
       const options: scanBarcode.ScanOptions = {
         scanTypes: [scanCore.ScanType.QR_CODE],
         enableMultiMode: false,
