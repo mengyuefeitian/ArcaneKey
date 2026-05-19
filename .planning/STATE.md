@@ -3,15 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: 鸿蒙端功能对齐
 status: planning
-stopped_at: "Roadmap initialized — ready to run /gsd:plan-phase 1"
-last_updated: "2026-05-19T00:00:00.000Z"
-last_activity: 2026-05-19 -- Project initialized for HarmonyOS feature alignment
+last_updated: "2026-05-19T10:22:00.000Z"
+last_activity: 2026-05-19 -- Phase 1 Plan 2 complete (FEATURE-AUDIT.md)
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 8
-  completed_plans: 0
-  percent: 0
+  total_plans: 6
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
@@ -25,12 +24,12 @@ See: .planning/PROJECT.md (updated 2026-05-19)
 
 ## Current Position
 
-Phase: 1 (缺陷修复 + 功能审计) — READY
-Plan: —
-Status: Planning complete, ready to execute
-Last activity: 2026-05-19 -- Project initialized
+Phase: 1 (缺陷修复 + 功能审计) — IN PROGRESS
+Plan: 2 of 2 complete
+Status: Phase 1 complete — awaiting device verification (FIX-01) before Phase 2 planning
+Last activity: 2026-05-19 -- Phase 1 Plan 2 complete (FEATURE-AUDIT.md)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 33%
 
 ## Phase Overview
 
@@ -63,6 +62,12 @@ Progress: [░░░░░░░░░░] 0%
 **分支：** `dev-harmonyos`
 **参考基准：** 微信小程序 `main` 分支（已验证 v1.0 + v1.1）
 
+## Decisions Made
+
+- **2026-05-19:** HarmonyOS uses ENC2+PBKDF2+salt encryption; WeChat uses raw XOR. One-way compatibility confirmed. Phase 2 must add ENC2 decoder to WeChat crypto.js.
+- **2026-05-19:** 0 missing features found in HarmonyOS vs WeChat baseline. Phase 2 scope is small (cipher fix + behavioral verification).
+- **2026-05-19:** Camera permission fix (FIX-01) implemented in Plan 1 but requires real-device verification before AUDIT-02 can be closed.
+
 ## Next Step
 
-Run `/gsd-plan-phase 1` to plan Phase 1 (缺陷修复 + 功能审计)
+Phase 2: 功能补全 — Requires user to verify camera permission on real HarmonyOS device first (AUDIT-02 gate). Then plan Phase 2 to fix WeChat ENC2 cipher decoder (FEAT-01) and run behavioral spot-checks.

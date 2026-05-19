@@ -10,10 +10,10 @@
 
 ### AUDIT — 功能差异审计
 
-- [ ] **AUDIT-01**: 对照小程序功能清单，逐项验证鸿蒙端实现状态，输出差异文档
-- [ ] **AUDIT-02**: 确认 QR 扫码修复后在真机上正常工作
-- [ ] **AUDIT-03**: 确认会员功能（限制 5 个 Token、会员无限）行为与小程序一致
-- [ ] **AUDIT-04**: 确认备份/导入的 XOR 加解密结果与小程序跨平台互通
+- [x] **AUDIT-01**: 对照小程序功能清单，逐项验证鸿蒙端实现状态，输出差异文档 — FEATURE-AUDIT.md created (2026-05-19)
+- [ ] **AUDIT-02**: 确认 QR 扫码修复后在真机上正常工作 — FIX-01 applied (Plan 1), real-device verification pending
+- [x] **AUDIT-03**: 确认会员功能（限制 5 个 Token、会员无限）行为与小程序一致 — Fully aligned (2026-05-19)
+- [x] **AUDIT-04**: 确认备份/导入的 XOR 加解密结果与小程序跨平台互通 — Finding: one-way compat; WeChat cannot read HarmonyOS ENC2 format (2026-05-19)
 
 ---
 
