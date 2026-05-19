@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: 鸿蒙端功能对齐
-status: planning
-last_updated: "2026-05-19T10:22:00.000Z"
-last_activity: 2026-05-19 -- Phase 1 Plan 2 complete (FEATURE-AUDIT.md)
+status: verifying
+last_updated: "2026-05-19T10:48:13.869Z"
+last_activity: 2026-05-19
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 6
-  completed_plans: 2
-  percent: 33
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 3
+  percent: 67
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-05-19)
 
 Phase: 1 (缺陷修复 + 功能审计) — IN PROGRESS
 Plan: 2 of 2 complete
-Status: Phase 1 complete — awaiting device verification (FIX-01) before Phase 2 planning
-Last activity: 2026-05-19 -- Phase 1 Plan 2 complete (FEATURE-AUDIT.md)
+Status: Phase complete — ready for verification
+Last activity: 2026-05-19
 
-Progress: [█████░░░░░] 33%
+Progress: [████████░░] 75%
 
 ## Phase Overview
 
@@ -67,7 +67,10 @@ Progress: [█████░░░░░] 33%
 - **2026-05-19:** HarmonyOS uses ENC2+PBKDF2+salt encryption; WeChat uses raw XOR. One-way compatibility confirmed. Phase 2 must add ENC2 decoder to WeChat crypto.js.
 - **2026-05-19:** 0 missing features found in HarmonyOS vs WeChat baseline. Phase 2 scope is small (cipher fix + behavioral verification).
 - **2026-05-19:** Camera permission fix (FIX-01) implemented in Plan 1 but requires real-device verification before AUDIT-02 can be closed.
+- **2026-05-19:** ENC2 cross-platform decoder shipped: PBKDF2-HMAC-SHA1 pure-JS in WeChat crypto.js; atob() padding bug fixed; legacy XOR path unchanged. FEAT-01 complete.
 
 ## Next Step
 
-Phase 2: 功能补全 — Requires user to verify camera permission on real HarmonyOS device first (AUDIT-02 gate). Then plan Phase 2 to fix WeChat ENC2 cipher decoder (FEAT-01) and run behavioral spot-checks.
+Phase 2 Plan 01 complete (02-01-PLAN.md). FEAT-01 implemented and verified with Node.js test vector.
+Remaining: Task 3 (checkpoint:human-verify) — test ENC2 import in WeChat DevTools and AUDIT-02 real-device QR scan (non-blocking).
+Phase 3 (AGC cloud sync) ready to plan once user confirms verification.
