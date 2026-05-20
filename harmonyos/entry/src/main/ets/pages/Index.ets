@@ -1052,6 +1052,7 @@ struct Index {
               this.confirmDelete = false;
             },
             onCopy: (code: string, brand: string) => this.copyCode(code, brand),
+            onDelete: (tok: Token) => this.requestDeleteToken(tok),
             onNavHide: () => { this.navVisible = false; },
             onNavShow: () => { this.navVisible = true; },
           })
