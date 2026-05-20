@@ -105,7 +105,7 @@ export struct ProfileView {
               Text('›').fontSize(18).fontColor('rgba(238,238,245,0.3)')
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .borderLeft({ width: this.isMember ? 3 : 0, color: this.isMember ? this.accentColor : Color.Transparent })
+            .border({ width: { left: this.isMember ? 3 : 0 }, color: { left: this.isMember ? this.accentColor : Color.Transparent } })
             .onClick(() => this.onMembershipTap())
             Divider().color('rgba(255,255,255,0.05)').strokeWidth(1).margin({ left: 16, right: 16 })
           }

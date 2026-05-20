@@ -71,6 +71,5 @@ Progress: [████████░░] 75%
 
 ## Next Step
 
-Phase 2 Plan 01 complete (02-01-PLAN.md). FEAT-01 implemented and verified with Node.js test vector.
-Remaining: Task 3 (checkpoint:human-verify) — test ENC2 import in WeChat DevTools and AUDIT-02 real-device QR scan (non-blocking).
-Phase 3 (AGC cloud sync) ready to plan once user confirms verification.
+Phase 2 Plan 02 (02-02-PLAN.md) ready to execute: "生成二维码" + "复制密钥" features for HarmonyOS (+ WeChat copy-secret).
+Run `/gsd-execute-phase 2` to execute, or execute 02-02-PLAN.md directly.
