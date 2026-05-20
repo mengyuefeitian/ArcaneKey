@@ -561,14 +561,33 @@ struct Index {
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
-              Row() {
-                Text('Secret Key（只读）').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              Row({ space: 6 }) {
+                Text('Secret Key').fontSize(12).fontColor('rgba(238,238,245,0.45)').flexGrow(1)
                 if (this.isMember) {
-                  Text(this.editSecretVisible ? '隐藏' : '查看')
-                    .fontSize(11).fontColor(this.accentColor).margin({ left: 8 })
-                    .onClick(() => { this.editSecretVisible = !this.editSecretVisible; })
+                  Button({ type: ButtonType.Normal }) {
+                    SymbolGlyph(this.editSecretVisible ? $r('sys.symbol.eye_slash') : $r('sys.symbol.eye'))
+                      .fontSize(15).fontColor([this.accentColor])
+                  }
+                  .width(30).height(30).borderRadius(10)
+                  .backgroundColor('rgba(255,255,255,0.06)')
+                  .onClick(() => { this.editSecretVisible = !this.editSecretVisible; })
+                  Button({ type: ButtonType.Normal }) {
+                    SymbolGlyph($r('sys.symbol.qrcode'))
+                      .fontSize(15).fontColor([this.accentColor])
+                  }
+                  .width(30).height(30).borderRadius(10)
+                  .backgroundColor('rgba(255,255,255,0.06)')
+                  .onClick(() => {
+                    const t = this.editToken;
+                    this.qrUri = 'otpauth://totp/' + encodeURIComponent(t.brand) + ':' +
+                      encodeURIComponent(t.account) + '?secret=' + t.secret +
+                      '&issuer=' + encodeURIComponent(t.brand);
+                    this.showQrToken = t;
+                    this.editToken = {} as Token;
+                    this.confirmDelete = false;
+                  })
                 }
-              }
+              }.alignItems(VerticalAlign.Center)
               Text(this.isMember && this.editSecretVisible ? (this.editToken?.secret ?? '') : '*'.repeat(Math.min(this.editToken?.secret.length ?? 0, 20)))
                 .fontSize(13)
                 .fontColor(this.isMember && this.editSecretVisible ? '#eeeef5' : 'rgba(238,238,245,0.4)')
@@ -595,22 +614,6 @@ struct Index {
             // Bottom bar
             Column({ space: 0 }) {
               if (!this.confirmDelete) {
-                if (this.isMember) {
-                  Button('生成二维码')
-                    .width('100%').backgroundColor(Color.Transparent)
-                    .border({ width: 1, color: this.accentColor + '80' }).borderRadius(14)
-                    .fontColor(this.accentColor).fontSize(13).fontWeight(600)
-                    .margin({ bottom: 8 })
-                    .onClick(() => {
-                      const t = this.editToken;
-                      this.qrUri = 'otpauth://totp/' + encodeURIComponent(t.brand) + ':' +
-                        encodeURIComponent(t.account) + '?secret=' + t.secret +
-                        '&issuer=' + encodeURIComponent(t.brand);
-                      this.showQrToken = t;
-                      this.editToken = {} as Token;
-                      this.confirmDelete = false;
-                    })
-                }
                 Row({ space: 10 }) {
                   Button('删除账号')
                     .flexGrow(1).backgroundColor('rgba(248,113,113,0.08)')
@@ -664,6 +667,7 @@ struct Index {
 
         Scroll() {
           Column({ space: 24 }) {
+            Logo({ brand: this.showQrToken?.brand ?? '', logoSize: 56 })
             Column({ space: 12 }) {
               QRCode(this.qrUri)
                 .width(240).height(240)
@@ -672,37 +676,8 @@ struct Index {
               Text('用其他验证器扫描此码可直接导入').fontSize(12)
                 .fontColor('rgba(238,238,245,0.4)').textAlign(TextAlign.Center)
             }.alignItems(HorizontalAlign.Center).width('100%')
-
-            Column({ space: 6 }) {
-              Text('Secret Key').fontSize(12).fontColor('rgba(238,238,245,0.45)')
-              Row({ space: 8 }) {
-                Text(this.showQrToken?.secret ?? '')
-                  .fontSize(13).fontFamily('monospace').letterSpacing(1)
-                  .fontColor('#eeeef5').flexGrow(1)
-                  .padding({ left: 14 })
-                Text('复制')
-                  .fontSize(12).fontColor(this.accentColor)
-                  .padding({ right: 14 })
-                  .onClick(() => {
-                    const d = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.showQrToken?.secret ?? '');
-                    pasteboard.getSystemPasteboard().setData(d);
-                    this.toast('密钥已复制');
-                  })
-              }
-              .width('100%').height(44).backgroundColor('#191920')
-              .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
-              .alignItems(VerticalAlign.Center)
-            }.alignItems(HorizontalAlign.Start).width('100%')
-
-            Column({ space: 6 }) {
-              Text('OTP URI').fontSize(12).fontColor('rgba(238,238,245,0.45)')
-              Text(this.qrUri).fontSize(11).fontColor('rgba(238,238,245,0.35)')
-                .width('100%').padding({ left: 14, right: 14, top: 10, bottom: 10 })
-                .backgroundColor('#191920')
-                .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
-                .wordBreak(WordBreak.BREAK_ALL)
-            }.alignItems(HorizontalAlign.Start).width('100%')
           }
+          .alignItems(HorizontalAlign.Center)
           .padding({ left: 20, right: 20, top: 12, bottom: 32 })
         }.scrollBar(BarState.Off).layoutWeight(1)
       }
