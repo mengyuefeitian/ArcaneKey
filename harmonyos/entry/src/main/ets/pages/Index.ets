@@ -81,6 +81,7 @@ struct Index {
 
   // ── QR Export Modal ─────────────────────────────────────────────
   @State showQrToken: Token | null = null;
+  @State qrUri: string = '';
 
   // ── Feedback & Membership Modals ────────────────────────────────
   @State showFeedback: boolean = false;
@@ -601,7 +602,11 @@ struct Index {
                     .fontColor(this.accentColor).fontSize(13).fontWeight(600)
                     .margin({ bottom: 8 })
                     .onClick(() => {
-                      this.showQrToken = this.editToken;
+                      const t = this.editToken;
+                      this.qrUri = 'otpauth://totp/' + encodeURIComponent(t.brand) + ':' +
+                        encodeURIComponent(t.account) + '?secret=' + t.secret +
+                        '&issuer=' + encodeURIComponent(t.brand);
+                      this.showQrToken = t;
                       this.editToken = {} as Token;
                       this.confirmDelete = false;
                     })
@@ -643,10 +648,6 @@ struct Index {
   // ── Builder: QR Export Modal ────────────────────────────────────
   @Builder
   qrModal() {
-    const token = this.showQrToken!;
-    const otpUri = 'otpauth://totp/' + encodeURIComponent(token.brand) + ':' +
-      encodeURIComponent(token.account) + '?secret=' + token.secret +
-      '&issuer=' + encodeURIComponent(token.brand);
     Stack() {
       Column() {
         Row() {
@@ -664,7 +665,7 @@ struct Index {
         Scroll() {
           Column({ space: 24 }) {
             Column({ space: 12 }) {
-              QRCode(otpUri)
+              QRCode(this.qrUri)
                 .width(240).height(240)
                 .color('#eeeef5').backgroundColor('#191920')
                 .borderRadius(12)
@@ -675,7 +676,7 @@ struct Index {
             Column({ space: 6 }) {
               Text('Secret Key').fontSize(12).fontColor('rgba(238,238,245,0.45)')
               Row({ space: 8 }) {
-                Text(token.secret)
+                Text(this.showQrToken?.secret ?? '')
                   .fontSize(13).fontFamily('monospace').letterSpacing(1)
                   .fontColor('#eeeef5').flexGrow(1)
                   .padding({ left: 14 })
@@ -683,7 +684,7 @@ struct Index {
                   .fontSize(12).fontColor(this.accentColor)
                   .padding({ right: 14 })
                   .onClick(() => {
-                    const d = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, token.secret);
+                    const d = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.showQrToken?.secret ?? '');
                     pasteboard.getSystemPasteboard().setData(d);
                     this.toast('密钥已复制');
                   })
@@ -695,7 +696,7 @@ struct Index {
 
             Column({ space: 6 }) {
               Text('OTP URI').fontSize(12).fontColor('rgba(238,238,245,0.45)')
-              Text(otpUri).fontSize(11).fontColor('rgba(238,238,245,0.35)')
+              Text(this.qrUri).fontSize(11).fontColor('rgba(238,238,245,0.35)')
                 .width('100%').padding({ left: 14, right: 14, top: 10, bottom: 10 })
                 .backgroundColor('#191920')
                 .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
