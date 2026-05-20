@@ -12,7 +12,7 @@ The WeChat Mini Program (`miniprogram/`) requires WeChat DevTools. The HarmonyOS
 
 ## Architecture
 
-This is a TOTP authenticator app (product name: **玄钥**) implemented across two independent platforms (WeChat Mini Program and HarmonyOS). All share the same product logic (30s rotating codes, XOR-encrypted backup, 10 accent themes, login-gated backup/import) but have separate codebases with platform-specific TOTP implementations and persistence.
+This is a TOTP authenticator app (product name: **星枢令**) implemented across two independent platforms (WeChat Mini Program and HarmonyOS). All share the same product logic (30s rotating codes, XOR-encrypted backup, 10 accent themes, login-gated backup/import) but have separate codebases with platform-specific TOTP implementations and persistence.
 
 **Cross-platform constants** (`THEMES`, `BRAND_COLORS`, `INITIAL_TOKENS`, XOR encryption key) are duplicated in:
 - `miniprogram/app.js` (WeChat)

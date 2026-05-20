@@ -33,17 +33,17 @@ export struct ProfileView {
         // Product branding
         Column({ space: 0 }) {
           Stack() {
-            Text('玄').fontSize(32).fontColor('#fff').fontWeight(800)
+            Image($r('app.media.logo_img')).width(48).height(48).objectFit(ImageFit.Contain)
           }
           .width(64).height(64).borderRadius(20)
           .backgroundColor(this.accentColor)
           .shadow({ radius: 32, color: this.accentColor + '55', offsetX: 0, offsetY: 8 })
           .margin({ bottom: 12 })
 
-          Text('玄钥').fontSize(24).fontWeight(800).fontColor('#eeeef5').letterSpacing(-0.5)
-          Text('玄钥：身份验证器')
+          Text('星枢令').fontSize(24).fontWeight(800).fontColor('#eeeef5').letterSpacing(-0.5)
+          Text('星枢令：身份验证器')
             .fontSize(13).fontColor('rgba(238,238,245,0.4)').margin({ top: 4 })
-          Text('为你所有的重要账号（如腾讯云、阿里云、AI账号、游戏等）配备了一把"动态的、每30秒换一次的数字钥匙"')
+          Text('为你所有的重要账号配备一把动态数字密码，每30秒自动更新，让登录更安全便捷，有效防范密码泄露风险，守护你的数字资产安全。')
             .fontSize(12).fontColor('rgba(238,238,245,0.3)').textAlign(TextAlign.Center)
             .lineHeight(21).margin({ top: 8 }).padding({ left: 20, right: 20 })
         }
@@ -202,7 +202,7 @@ export struct ProfileView {
             .onClick(() => this.onLogout())
         }
 
-        Text('玄钥 v1.0.0')
+        Text('星枢令 v1.0.0')
           .fontSize(12).fontColor('rgba(238,238,245,0.2)')
           .width('100%').textAlign(TextAlign.Center)
           .padding({ top: 24, bottom: 100 })

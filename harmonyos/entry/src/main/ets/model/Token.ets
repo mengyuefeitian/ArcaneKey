@@ -48,4 +48,4 @@ export const INITIAL_TOKENS: Token[] = [
 
 export const FREE_TOKEN_LIMIT: number = 5;
 export const MEMBERSHIP_PRICE: number = 19.90;
-export const APP_NAME: string = '玄钥';
+export const APP_NAME: string = '星枢令';
