@@ -581,7 +581,7 @@ struct Index {
                   if (this.isMember && this.editSecretVisible && this.editToken?.secret) {
                     const d = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.editToken.secret);
                     pasteboard.getSystemPasteboard().setData(d);
-                    this.showToast('密钥已复制');
+                    this.toast('密钥已复制');
                   }
                 })
               if (!this.isMember) {
@@ -603,6 +603,7 @@ struct Index {
                     .onClick(() => {
                       this.showQrToken = this.editToken;
                       this.editToken = {} as Token;
+                      this.confirmDelete = false;
                     })
                 }
                 Row({ space: 10 }) {
@@ -684,7 +685,7 @@ struct Index {
                   .onClick(() => {
                     const d = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, token.secret);
                     pasteboard.getSystemPasteboard().setData(d);
-                    this.showToast('密钥已复制');
+                    this.toast('密钥已复制');
                   })
               }
               .width('100%').height(44).backgroundColor('#191920')
@@ -1146,7 +1147,7 @@ struct Index {
 
       // ── Modals (overlaid on top) ────────────────────────────────
       if (this.editToken.id) { this.editModal() }
-      if (this.showQrToken !== null) { this.qrModal() }
+      if (this.showQrToken !== null && this.isMember) { this.qrModal() }
       if (this.showLogin)  { this.loginModal() }
       if (this.showBackup) { this.backupModal() }
       if (this.showImport) { this.importModal() }
