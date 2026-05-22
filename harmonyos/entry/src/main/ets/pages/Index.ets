@@ -1,9 +1,11 @@
 import { pasteboard } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
+import { window, display } from '@kit.ArkUI';
 import { picker } from '@kit.CoreFileKit';
 import { preferences } from '@kit.ArkData';
 import fs from '@ohos.file.fs';
-import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, BRAND_COLORS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
+import util from '@ohos.util';
+import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData } from '../utils/StorageUtil';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -95,6 +97,9 @@ struct Index {
   @State toastMsg: string = '';
   @State toastVisible: boolean = false;
 
+  // ── Navigation safe area (gesture bar height in vp) ─────────────
+  @State navSafeBottom: number = 34;
+
   private timer: number = -1;
   private toastTimer: number = -1;
   private cdTimer: number = -1;
@@ -107,13 +112,20 @@ struct Index {
       this.timeLeft_ = timeLeft();
       if (this.timeLeft_ === 30) this.refreshOtp();
     }, 1000) as number;
-    // Member auto-restore and sync (delayed to ensure loadData finished)
-    setTimeout(() => {
-      if (this.isMember) {
-        this.cloudRestore();
-        this.startAutoSync();
+    this.queryNavSafeArea();
+  }
+
+  private queryNavSafeArea(): void {
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) return;
+    window.getLastWindow(ctx).then((win) => {
+      const avoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
+      const density = display.getDefaultDisplaySync().densityPixels;
+      const heightVP = avoidArea.bottomRect.height / density;
+      if (heightVP > 0) {
+        this.navSafeBottom = Math.round(heightVP);
       }
-    }, 500);
+    }).catch(() => {});
   }
 
   aboutToDisappear(): void {
@@ -125,9 +137,17 @@ struct Index {
 
   // ── Data ────────────────────────────────────────────────────────
   private async loadData(): Promise<void> {
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) {
+      this.tokens = INITIAL_TOKENS.slice();
+      return;
+    }
+    const inited = await initPreferences(ctx);
+    if (!inited) {
+      this.tokens = INITIAL_TOKENS.slice();
+      return;
+    }
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
-      await initPreferences(ctx);
       const saved = await loadTokens();
       this.tokens = (saved && saved.length > 0) ? saved : INITIAL_TOKENS.slice();
       const theme = await loadTheme();
@@ -136,6 +156,10 @@ struct Index {
       this.isMember = member.isMember;
       this.memberExpiry = member.expiry || '';
       this.refreshOtp();
+      if (this.isMember) {
+        this.cloudRestore();
+        this.startAutoSync();
+      }
     } catch (_) {
       this.tokens = INITIAL_TOKENS.slice();
     }
@@ -186,6 +210,12 @@ struct Index {
     this.toast('已保存');
   }
 
+  private isValidToken(t: object): boolean {
+    const tok = t as Record<string, string>;
+    return typeof tok['id'] === 'string' && tok['id'].length > 0 &&
+      typeof tok['secret'] === 'string' && tok['secret'].length > 0;
+  }
+
   private deleteToken(localOnly: boolean): void {
     if (!this.deleteTarget.id && !this.editToken.id) return;
     const id = this.deleteTarget.id || this.editToken.id;
@@ -230,7 +260,8 @@ struct Index {
 
   private doBackup(): void {
     if (!this.backupPw || this.backupPw !== this.backupPw2) return;
-    const ctx = getContext(this) as common.UIAbilityContext;
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('上下文错误，请重启应用'); return; }
     const fileName = `auth_backup_${Date.now()}.atbk`;
     const tmpPath = `${ctx.filesDir}/${fileName}`;
     try {
@@ -267,23 +298,32 @@ struct Index {
     } catch (_) { this.toast('备份失败'); }
   }
 
+  private resetImportState(): void {
+    this.importText = '';
+    this.importPw = '';
+    this.importFileUri = '';
+    this.importFileName = '';
+  }
+
   private doImport(): void {
     if (!this.importText || !this.importPw) return;
     try {
       const data = decryptData(this.importText, this.importPw) as Token[];
       if (!Array.isArray(data)) throw new Error('invalid');
       const ids = new Set(this.tokens.map((t: Token) => t.id));
-      const imported = data.filter((t: Token) => !ids.has(t.id));
+      const imported = data.filter((t: Token) => this.isValidToken(t as object) && !ids.has(t.id));
       this.tokens = this.tokens.concat(imported);
       saveTokens(this.tokens);
       this.refreshOtp();
+      this.resetImportState();
       this.showImport = false;
       this.toast(`成功导入 ${imported.length} 个账号`);
     } catch (_) { this.toast('解密失败，请检查密码'); }
   }
 
   private selectImportFile(): void {
-    const ctx = getContext(this) as common.UIAbilityContext;
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('上下文错误，请重启应用'); return; }
     const docPicker = new picker.DocumentViewPicker(ctx);
     docPicker.select({ maxSelectNumber: 1 }).then((result: string[]) => {
       if (result && result.length > 0) {
@@ -293,9 +333,11 @@ struct Index {
         this.importFileName = fileName;
         const file: fs.File = fs.openSync(uri, fs.OpenMode.READ_ONLY);
         const stat: fs.Stat = fs.statSync(uri);
+        if (stat.size > 1024 * 1024) { fs.closeSync(file.fd); this.toast('文件过大，请选择小于1MB的备份文件'); return; }
         const buf: ArrayBuffer = new ArrayBuffer(stat.size);
         fs.readSync(file.fd, buf);
-        this.importText = String.fromCodePoint(...new Uint8Array(buf));
+        const decoder = new util.TextDecoder('utf-8');
+        this.importText = decoder.decodeToString(new Uint8Array(buf));
         fs.closeSync(file.fd);
       }
     }).catch(() => { this.toast('选择文件取消'); });
@@ -313,7 +355,8 @@ struct Index {
   private cloudBackup(): void {
     if (!this.isMember) return;
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
+      const ctx = AppStorage.get<common.UIAbilityContext>('context');
+      if (!ctx) return;
       const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
       const data = JSON.stringify(this.tokens);
       prefs.putSync('tokens_backup', data);
@@ -324,13 +367,15 @@ struct Index {
   private cloudRestore(): void {
     if (!this.isMember) return;
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
+      const ctx = AppStorage.get<common.UIAbilityContext>('context');
+      if (!ctx) return;
       const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
       const data = prefs.getSync('tokens_backup', '') as string;
       if (data) {
         const cloudTokens = JSON.parse(data) as Token[];
+        if (!Array.isArray(cloudTokens)) return;
         const ids = new Set(this.tokens.map((t: Token) => t.id));
-        const newTokens = cloudTokens.filter((t: Token) => !ids.has(t.id));
+        const newTokens = cloudTokens.filter((t: Token) => this.isValidToken(t as object) && !ids.has(t.id));
         if (newTokens.length > 0) {
           this.tokens = this.tokens.concat(newTokens);
           saveTokens(this.tokens);
@@ -344,11 +389,14 @@ struct Index {
   private cloudDelete(tokenId: string): void {
     if (!this.isMember) return;
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
+      const ctx = AppStorage.get<common.UIAbilityContext>('context');
+      if (!ctx) return;
       const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
       const data = prefs.getSync('tokens_backup', '') as string;
       if (data) {
-        const tokens = (JSON.parse(data) as Token[]).filter((t: Token) => t.id !== tokenId);
+        const parsed = JSON.parse(data) as object;
+        if (!Array.isArray(parsed)) return;
+        const tokens = (parsed as Token[]).filter((t: Token) => t.id !== tokenId);
         prefs.putSync('tokens_backup', JSON.stringify(tokens));
         prefs.flushSync();
       }
@@ -472,15 +520,14 @@ struct Index {
       .onClick(() => { this.currentTab = 2; this.navVisible = true; })
     }
     .width('90%')
-    .height(62)
+    .height(60)
     .position({ x: '5%', y: '100%' })
-    .translate({ x: 0, y: this.navVisible ? -82 : 0 })
+    .translate({ x: 0, y: this.navVisible ? -(60 + this.navSafeBottom + 16) : 0 })
     .animation({ duration: 300, curve: Curve.EaseInOut })
-    // 胶囊背景
-    .backgroundColor('rgba(30,30,42,0.92)')
-    .borderRadius(31)
-    .border({ width: 0.5, color: 'rgba(255,255,255,0.12)' })
-    .shadow({ radius: 20, color: 'rgba(0,0,0,0.4)', offsetX: 0, offsetY: 8 })
+    .backgroundColor('rgba(30,30,40,0.45)')
+    .backdropBlur(20)
+    .borderRadius(30)
+    .shadow({ radius: 10, color: 'rgba(0,0,0,0.3)', offsetX: 0, offsetY: 4 })
     .justifyContent(FlexAlign.SpaceAround)
   }
 
@@ -658,7 +705,7 @@ struct Index {
             Text('×').fontSize(20).fontColor('rgba(238,238,245,0.75)')
           }
           .backgroundColor('rgba(255,255,255,0.08)').borderRadius(11).width(36).height(36)
-          .onClick(() => { this.showQrToken = null; })
+          .onClick(() => { this.showQrToken = null; this.qrUri = ''; })
           Text('导出账号').fontSize(17).fontWeight(650).fontColor('#eeeef5')
           Text('').width(36).height(36)
         }
@@ -820,7 +867,7 @@ struct Index {
   @Builder
   importModal() {
     Column() {
-      this.modalHeader('导入备份', () => { this.showImport = false; })
+      this.modalHeader('导入备份', () => { this.resetImportState(); this.showImport = false; })
       Column({ space: 14 }) {
         Button(this.importFileName ? `已选择: ${this.importFileName}` : '选择备份文件')
           .width('100%').height(44).borderRadius(12)
@@ -1117,7 +1164,8 @@ struct Index {
       })
       // Hide the default tab bar — we use our custom floating nav
       .barWidth(0)
-      .padding({ top: 44, bottom: 80 })
+      .barHeight(0)
+      .padding({ top: 44 })
 
       // ── Custom floating bottom nav ──────────────────────────────
       this.bottomNav()

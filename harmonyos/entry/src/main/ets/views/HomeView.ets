@@ -16,6 +16,21 @@ export struct HomeView {
   onNavShow: () => void = () => {};
 
   private lastScrollY: number = 0;
+
+  @Builder
+  DeleteAction(tok: Token) {
+    Column() {
+      Image($r('app.media.icon_delete'))
+        .width(26).height(26)
+        .fillColor('#ff5a5a')
+    }
+    .width(64)
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor(Color.Transparent)
+    .onClick(() => this.onDelete(tok))
+  }
   private scroller: Scroller = new Scroller();
 
   private filtered(): Token[] {
@@ -95,6 +110,7 @@ export struct HomeView {
               onDelete: (t: Token) => this.onDelete(t),
             })
           }
+          .swipeAction({ end: () => { this.DeleteAction(tok) } })
         }, (tok: Token) => tok.id)
         ListItem() { Column().height(96) }
       }

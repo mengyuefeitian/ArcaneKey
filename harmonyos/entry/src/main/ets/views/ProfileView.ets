@@ -1,11 +1,3 @@
-interface MenuItem {
-  id: string;
-  icon: string;
-  label: string;
-  desc: string;
-  locked: boolean;
-}
-
 @Component
 export struct ProfileView {
   @Prop accentColor: string = '#4080D0';
@@ -32,13 +24,13 @@ export struct ProfileView {
       Column() {
         // Product branding
         Column({ space: 0 }) {
-          Stack() {
-            Image($r('app.media.logo_img')).width(48).height(48).objectFit(ImageFit.Contain)
-          }
-          .width(64).height(64).borderRadius(20)
-          .backgroundColor(this.accentColor)
-          .shadow({ radius: 32, color: this.accentColor + '55', offsetX: 0, offsetY: 8 })
-          .margin({ bottom: 12 })
+          Image($r('app.media.logo_img'))
+            .width(64).height(64)
+            .objectFit(ImageFit.Cover)
+            .borderRadius(32)
+            .clip(true)
+            .shadow({ radius: 32, color: this.accentColor + '55', offsetX: 0, offsetY: 8 })
+            .margin({ bottom: 12 })
 
           Text('星枢令').fontSize(24).fontWeight(800).fontColor('#eeeef5').letterSpacing(-0.5)
           Text('星枢令：身份验证器')
@@ -53,13 +45,13 @@ export struct ProfileView {
         if (this.loggedIn) {
           Row({ space: 12 }) {
             if (this.userAvatar) {
-              Image(this.userAvatar).width(40).height(40).borderRadius(20)
+              Image(this.userAvatar).width(40).height(40).borderRadius(12)
             } else {
               Stack() {
                 Text(this.userName.length > 0 ? this.userName[0].toUpperCase() : 'U')
                   .fontSize(18).fontColor('#fff').fontWeight(700)
               }
-              .width(40).height(40).borderRadius(20)
+              .width(40).height(40).borderRadius(12)
               .backgroundColor(this.accentColor)
             }
             Column({ space: 2 }) {
@@ -96,7 +88,10 @@ export struct ProfileView {
           // Membership
           Column() {
             Row({ space: 0 }) {
-              Text('👑').fontSize(22).margin({ right: 14 })
+              Stack() { Text('👑').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text(this.isMember ? '会员特权' : '开通会员').fontSize(15).fontColor('#eeeef5').fontWeight(520)
                 Text(this.isMember ? `有效期至 ${this.memberExpiry}` : '¥19.90/年，无限制添加')
@@ -112,7 +107,10 @@ export struct ProfileView {
           // Account
           Column() {
             Row({ space: 0 }) {
-              Text('👤').fontSize(22).margin({ right: 14 })
+              Stack() { Text('👤').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('账号管理').fontSize(15).fontColor('#eeeef5').fontWeight(520)
                 Text(this.loggedIn ? '管理你的账号信息' : '登录后可用')
@@ -131,7 +129,10 @@ export struct ProfileView {
           // Backup
           Column() {
             Row({ space: 0 }) {
-              Text('☁️').fontSize(22).margin({ right: 14 })
+              Stack() { Text('☁️').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('备份数据').fontSize(15).fontColor('#eeeef5').fontWeight(520)
                 Text(this.isMember ? '加密备份到云端' : '会员专属')
@@ -147,7 +148,10 @@ export struct ProfileView {
           // Import
           Column() {
             Row({ space: 0 }) {
-              Text('📥').fontSize(22).margin({ right: 14 })
+              Stack() { Text('📥').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('导入备份').fontSize(15).fontColor('#eeeef5').fontWeight(520)
                 Text(this.isMember ? '从云端恢复' : '会员专属')
@@ -163,7 +167,10 @@ export struct ProfileView {
           // Theme
           Column() {
             Row({ space: 0 }) {
-              Text('🎨').fontSize(22).margin({ right: 14 })
+              Stack() { Text('🎨').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('皮肤主题').fontSize(15).fontColor('#eeeef5').fontWeight(520)
                 Text(this.themeName)
@@ -178,7 +185,10 @@ export struct ProfileView {
           // Feedback
           Column() {
             Row({ space: 0 }) {
-              Text('💬').fontSize(22).margin({ right: 14 })
+              Stack() { Text('💬').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('意见与建议').fontSize(15).fontColor('#eeeef5').fontWeight(520)
                 Text('向我们反馈问题或建议')
