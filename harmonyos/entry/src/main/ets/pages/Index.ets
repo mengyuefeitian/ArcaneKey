@@ -79,6 +79,10 @@ struct Index {
   @State deleteTarget: Token = {} as Token;
   @State showDeleteConfirm: boolean = false;
 
+  // ── QR Export Modal ─────────────────────────────────────────────
+  @State showQrToken: Token | null = null;
+  @State qrUri: string = '';
+
   // ── Feedback & Membership Modals ────────────────────────────────
   @State showFeedback: boolean = false;
   @State showMembership: boolean = false;
@@ -557,14 +561,33 @@ struct Index {
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
-              Row() {
-                Text('Secret Key（只读）').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              Row({ space: 6 }) {
+                Text('Secret Key').fontSize(12).fontColor('rgba(238,238,245,0.45)').flexGrow(1)
                 if (this.isMember) {
-                  Text(this.editSecretVisible ? '隐藏' : '查看')
-                    .fontSize(11).fontColor(this.accentColor).margin({ left: 8 })
-                    .onClick(() => { this.editSecretVisible = !this.editSecretVisible; })
+                  Button({ type: ButtonType.Normal }) {
+                    SymbolGlyph(this.editSecretVisible ? $r('sys.symbol.eye_slash') : $r('sys.symbol.eye'))
+                      .fontSize(15).fontColor([this.accentColor])
+                  }
+                  .width(30).height(30).borderRadius(10)
+                  .backgroundColor('rgba(255,255,255,0.06)')
+                  .onClick(() => { this.editSecretVisible = !this.editSecretVisible; })
+                  Button({ type: ButtonType.Normal }) {
+                    SymbolGlyph($r('sys.symbol.qrcode'))
+                      .fontSize(15).fontColor([this.accentColor])
+                  }
+                  .width(30).height(30).borderRadius(10)
+                  .backgroundColor('rgba(255,255,255,0.06)')
+                  .onClick(() => {
+                    const t = this.editToken;
+                    this.qrUri = 'otpauth://totp/' + encodeURIComponent(t.brand) + ':' +
+                      encodeURIComponent(t.account) + '?secret=' + t.secret +
+                      '&issuer=' + encodeURIComponent(t.brand);
+                    this.showQrToken = t;
+                    this.editToken = {} as Token;
+                    this.confirmDelete = false;
+                  })
                 }
-              }
+              }.alignItems(VerticalAlign.Center)
               Text(this.isMember && this.editSecretVisible ? (this.editToken?.secret ?? '') : '*'.repeat(Math.min(this.editToken?.secret.length ?? 0, 20)))
                 .fontSize(13)
                 .fontColor(this.isMember && this.editSecretVisible ? '#eeeef5' : 'rgba(238,238,245,0.4)')
@@ -574,6 +597,13 @@ struct Index {
                 .textAlign(TextAlign.Start)
                 .backgroundColor('#191920')
                 .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+                .onClick(() => {
+                  if (this.isMember && this.editSecretVisible && this.editToken?.secret) {
+                    const d = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.editToken.secret);
+                    pasteboard.getSystemPasteboard().setData(d);
+                    this.toast('密钥已复制');
+                  }
+                })
               if (!this.isMember) {
                 Text('🔒 开通会员可查看密钥')
                   .fontSize(11).fontColor('rgba(238,238,245,0.25)').margin({ top: 4 })
@@ -582,25 +612,29 @@ struct Index {
             .alignItems(HorizontalAlign.Start).width('100%')
 
             // Bottom bar
-            Row({ space: 10 }) {
+            Column({ space: 0 }) {
               if (!this.confirmDelete) {
-                Button('删除账号')
-                  .flexGrow(1).backgroundColor('rgba(248,113,113,0.08)')
-                  .border({ width: 1, color: 'rgba(248,113,113,0.25)' })
-                  .borderRadius(14).fontColor('#f87171').fontSize(14).fontWeight(600)
-                  .onClick(() => { this.requestDeleteToken(this.editToken); })
-                Button('保存')
-                  .flexGrow(1).backgroundColor(this.accentColor)
-                  .borderRadius(14).fontColor('#fff').fontSize(14).fontWeight(650)
-                  .onClick(() => this.saveEdit())
+                Row({ space: 10 }) {
+                  Button('删除账号')
+                    .flexGrow(1).backgroundColor('rgba(248,113,113,0.08)')
+                    .border({ width: 1, color: 'rgba(248,113,113,0.25)' })
+                    .borderRadius(14).fontColor('#f87171').fontSize(14).fontWeight(600)
+                    .onClick(() => { this.requestDeleteToken(this.editToken); })
+                  Button('保存')
+                    .flexGrow(1).backgroundColor(this.accentColor)
+                    .borderRadius(14).fontColor('#fff').fontSize(14).fontWeight(650)
+                    .onClick(() => this.saveEdit())
+                }.width('100%')
               } else {
-                Button('取消').flexGrow(1).backgroundColor(Color.Transparent)
-                  .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(14)
-                  .fontColor('rgba(238,238,245,0.6)').fontSize(14)
-                  .onClick(() => { this.confirmDelete = false; })
-                Button('确认删除').flexGrow(1).backgroundColor('#ef4444').borderRadius(14)
-                  .fontColor('#fff').fontSize(14).fontWeight(650)
-                  .onClick(() => this.deleteToken(true))
+                Row({ space: 10 }) {
+                  Button('取消').flexGrow(1).backgroundColor(Color.Transparent)
+                    .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(14)
+                    .fontColor('rgba(238,238,245,0.6)').fontSize(14)
+                    .onClick(() => { this.confirmDelete = false; })
+                  Button('确认删除').flexGrow(1).backgroundColor('#ef4444').borderRadius(14)
+                    .fontColor('#fff').fontSize(14).fontWeight(650)
+                    .onClick(() => this.deleteToken(true))
+                }.width('100%')
               }
             }
             .width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
@@ -612,6 +646,45 @@ struct Index {
       .padding({ top: 44 })
     }
     .width('100%').height('100%').zIndex(300)
+  }
+
+  // ── Builder: QR Export Modal ────────────────────────────────────
+  @Builder
+  qrModal() {
+    Stack() {
+      Column() {
+        Row() {
+          Button({ type: ButtonType.Normal }) {
+            Text('×').fontSize(20).fontColor('rgba(238,238,245,0.75)')
+          }
+          .backgroundColor('rgba(255,255,255,0.08)').borderRadius(11).width(36).height(36)
+          .onClick(() => { this.showQrToken = null; })
+          Text('导出账号').fontSize(17).fontWeight(650).fontColor('#eeeef5')
+          Text('').width(36).height(36)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 8 })
+        .justifyContent(FlexAlign.SpaceBetween)
+
+        Scroll() {
+          Column({ space: 24 }) {
+            Logo({ brand: this.showQrToken?.brand ?? '', logoSize: 56 })
+            Column({ space: 12 }) {
+              QRCode(this.qrUri)
+                .width(240).height(240)
+                .color('#eeeef5').backgroundColor('#191920')
+                .borderRadius(12)
+              Text('用其他验证器扫描此码可直接导入').fontSize(12)
+                .fontColor('rgba(238,238,245,0.4)').textAlign(TextAlign.Center)
+            }.alignItems(HorizontalAlign.Center).width('100%')
+          }
+          .alignItems(HorizontalAlign.Center)
+          .padding({ left: 20, right: 20, top: 12, bottom: 32 })
+        }.scrollBar(BarState.Off).layoutWeight(1)
+      }
+      .width('100%').height('100%').backgroundColor('#0d0d12')
+      .padding({ top: 44 })
+    }
+    .width('100%').height('100%').zIndex(350)
   }
 
   // ── Builder: Login Modal ────────────────────────────────────────
@@ -842,7 +915,7 @@ struct Index {
             .fontColor('#fff').fontSize(14).fontWeight(650)
             .onClick(() => this.deleteToken(false))
         }.width('100%')
-        Button('取消').width('100%').marginTop(10).backgroundColor(Color.Transparent)
+        Button('取消').width('100%').margin({ top: 10 }).backgroundColor(Color.Transparent)
           .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(12)
           .fontColor('rgba(238,238,245,0.6)').fontSize(14)
           .onClick(() => { this.showDeleteConfirm = false; this.deleteTarget = {} as Token; })
@@ -979,6 +1052,7 @@ struct Index {
               this.confirmDelete = false;
             },
             onCopy: (code: string, brand: string) => this.copyCode(code, brand),
+            onDelete: (tok: Token) => this.requestDeleteToken(tok),
             onNavHide: () => { this.navVisible = false; },
             onNavShow: () => { this.navVisible = true; },
           })
@@ -1050,6 +1124,7 @@ struct Index {
 
       // ── Modals (overlaid on top) ────────────────────────────────
       if (this.editToken.id) { this.editModal() }
+      if (this.showQrToken !== null && this.isMember) { this.qrModal() }
       if (this.showLogin)  { this.loginModal() }
       if (this.showBackup) { this.backupModal() }
       if (this.showImport) { this.importModal() }

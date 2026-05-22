@@ -1,9 +1,11 @@
 # OS
 .DS_Store
+**/.DS_Store
 Thumbs.db
 
 # Private keys & credentials
 private.*.key
+private.wx*.key
 *.pem
 *.p12
 secrets/
@@ -14,6 +16,29 @@ secrets/
 .planning/
 miniprogram/.planning/
 
-# WeChat DevTools generated
+# WeChat Mini Program
 miniprogram/node_modules/
+miniprogram/miniprogram_npm/
 node_modules/
+
+# HarmonyOS 构建缓存 (DevEco Studio / hvigor)
+harmonyos/.hvigor/
+harmonyos/entry/build/
+harmonyos/build/
+
+# ohpm 依赖包
+harmonyos/oh_modules/
+harmonyos/*/oh_modules/
+
+# IDE 生成文件 (DevEco Studio)
+harmonyos/.idea/.deveco/
+harmonyos/.idea/workspace.xml
+harmonyos/.idea/usage.statistics.xml
+
+# 本地签名配置
+harmonyos/local.properties
+
+# 构建产物
+*.hap
+*.app
+*.har

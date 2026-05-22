@@ -11,6 +11,7 @@ export struct HomeView {
   @Link searchQ: string;
   onEdit: (tok: Token) => void = () => {};
   onCopy: (code: string, brand: string) => void = () => {};
+  onDelete: (tok: Token) => void = () => {};
   onNavHide: () => void = () => {};
   onNavShow: () => void = () => {};
 
@@ -91,6 +92,7 @@ export struct HomeView {
               accentColor: this.accentColor,
               onEdit: (t: Token) => this.onEdit(t),
               onCopy: (code: string, brand: string) => this.onCopy(code, brand),
+              onDelete: (t: Token) => this.onDelete(t),
             })
           }
         }, (tok: Token) => tok.id)

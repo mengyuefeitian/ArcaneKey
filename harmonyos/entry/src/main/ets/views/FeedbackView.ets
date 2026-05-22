@@ -89,7 +89,7 @@ export struct FeedbackView {
       return;
     }
     this.sending = true;
-    const subject = `[玄钥][${this.type}]`;
+    const subject = `[星枢令][${this.type}]`;
     let body = `反馈类型: ${this.type}\n\n反馈内容:\n${this.content}\n\n`;
     if (this.contact) body += `联系方式: ${this.contact}\n`;
     try {
