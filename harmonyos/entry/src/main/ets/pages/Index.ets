@@ -1015,11 +1015,13 @@ struct Index {
             }
             .padding(16).backgroundColor('#191920').borderRadius(16).width('100%').margin({ bottom: 24 })
 
-            Button('立即开通会员 ¥19.90/年')
-              .width('100%').height(50).borderRadius(15)
-              .backgroundColor('#f59e0b').fontColor('#fff').fontSize(16).fontWeight(700)
-              .onClick(() => this.buyMembership())
-            Text('演示模式：点击直接开通').fontSize(11).fontColor('rgba(238,238,245,0.3)')
+            Column({ space: 10 }) {
+              Text('🚀 会员功能即将上线').fontSize(16).fontWeight(700).fontColor('#eeeef5')
+              Text('华为支付接入开发中，敬请期待\n感谢您的耐心等候').fontSize(13).fontColor('rgba(238,238,245,0.45)').textAlign(TextAlign.Center)
+            }
+            .width('100%').padding(20).backgroundColor('#191920')
+            .borderRadius(16).border({ width: 1, color: 'rgba(255,255,255,0.07)' })
+            .alignItems(HorizontalAlign.Center)
           }
         }
         .padding({ left: 20, right: 20, bottom: 40 })
