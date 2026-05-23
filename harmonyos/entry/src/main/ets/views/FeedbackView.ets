@@ -1,5 +1,4 @@
-import { common } from '@kit.AbilityKit';
-import { Want } from '@kit.AbilityKit';
+import { common, Want } from '@kit.AbilityKit';
 
 @Component
 export struct FeedbackView {
@@ -81,27 +80,25 @@ export struct FeedbackView {
     .width('100%').height('100%').backgroundColor('#0d0d12')
   }
 
-  private submitFeedback(): void {
-    if (!this.canSubmit) {
-      if (this.content.length < 10) {
-        // Show toast via parent — for now just return
-      }
-      return;
-    }
+  private async submitFeedback(): Promise<void> {
+    if (!this.canSubmit) return;
     this.sending = true;
     const subject = `[星枢令][${this.type}]`;
     let body = `反馈类型: ${this.type}\n\n反馈内容:\n${this.content}\n\n`;
     if (this.contact) body += `联系方式: ${this.contact}\n`;
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
+      const ctx = AppStorage.get<common.UIAbilityContext>('context');
+      if (!ctx) throw new Error('no context');
       const uri = `mailto:mengyuefeitian@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       const want: Want = {
         action: 'ohos.want.action.sendData',
         uri: uri,
       };
-      ctx.startAbility(want);
-    } catch (_) {}
-    this.sending = false;
-    this.onClose();
+      await ctx.startAbility(want);
+      this.sending = false;
+      this.onClose();
+    } catch (_) {
+      this.sending = false;
+    }
   }
 }

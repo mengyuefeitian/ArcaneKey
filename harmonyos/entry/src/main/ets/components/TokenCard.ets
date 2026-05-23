@@ -16,8 +16,6 @@ export struct TokenCard {
   onEdit: (tok: Token) => void = () => {};
   onCopy: (code: string, brand: string) => void = () => {};
   onDelete: (tok: Token) => void = () => {};
-  @State swipeOffset: number = 0;
-
   private interpolateColor(hex: string, t: number): string {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -36,36 +34,18 @@ export struct TokenCard {
   contextMenu() {
     Menu() {
       MenuItem({ content: '复制口令' })
-        .onAction(() => this.onCopy(this.otp.current, this.token.brand))
+        .onClick(() => this.onCopy(this.otp.current, this.token.brand))
       MenuItem({ content: '复制下一个口令' })
-        .onAction(() => this.onCopy(this.otp.next, this.token.brand))
+        .onClick(() => this.onCopy(this.otp.next, this.token.brand))
       MenuItem({ content: '编辑' })
-        .onAction(() => this.onEdit(this.token))
+        .onClick(() => this.onEdit(this.token))
       MenuItem({ content: '删除' })
-        .onAction(() => this.onDelete(this.token))
+        .onClick(() => this.onDelete(this.token))
     }
   }
 
   build() {
-    Stack() {
-      // Bottom layer: red delete button revealed when card slides left
-      Row() {
-        Button('删除')
-          .width(72)
-          .height('100%')
-          .backgroundColor('#ef4444')
-          .fontColor('#fff')
-          .fontSize(14)
-          .fontWeight(700)
-          .borderRadius(0)
-          .onClick(() => this.onDelete(this.token))
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.End)
-
-      // Top layer: card content slides left via swipeOffset
-      Column() {
+    Column() {
         // Upper row — edit
         Row({ space: 12 }) {
           Logo({ brand: this.token.brand, logoSize: 42 })
@@ -134,25 +114,7 @@ export struct TokenCard {
       .backgroundColor('#191920')
       .border({ width: 1, color: 'rgba(255,255,255,0.05)' })
       .clip(true)
-      .offset({ x: this.swipeOffset })
-      .animation({ duration: 200, curve: Curve.EaseOut })
-      .gesture(
-        PanGesture({ direction: PanDirection.Horizontal, distance: 5 })
-          .onActionUpdate((event: GestureEvent) => {
-            if (event.offsetX < 0) {
-              this.swipeOffset = Math.max(event.offsetX, -72);
-            } else {
-              this.swipeOffset = 0;
-            }
-          })
-          .onActionEnd((_event: GestureEvent) => {
-            this.swipeOffset = this.swipeOffset < -36 ? -72 : 0;
-          })
-      )
       .bindContextMenu(this.contextMenu(), ResponseType.LongPress)
-    }
-    .width('100%')
-    .clip(true)
-    .margin({ bottom: 10 })
+      .margin({ bottom: 10 })
   }
 }

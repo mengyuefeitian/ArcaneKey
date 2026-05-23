@@ -7,6 +7,7 @@ export default class EntryAbility extends UIAbility {
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(0x0000, 'ArcaneKey', '%{public}s', 'Ability onCreate');
+    AppStorage.setOrCreate('context', this.context);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

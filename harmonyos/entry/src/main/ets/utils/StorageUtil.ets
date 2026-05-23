@@ -8,8 +8,14 @@ const PREF_NAME = 'arcankey_prefs';
 
 let pref: preferences.Preferences | null = null;
 
-export async function initPreferences(context: Context): Promise<void> {
-  pref = await preferences.getPreferences(context, PREF_NAME);
+export async function initPreferences(context: Context): Promise<boolean> {
+  try {
+    pref = await preferences.getPreferences(context, PREF_NAME);
+    return true;
+  } catch (e) {
+    console.error('initPreferences failed: ' + (e as Error).message);
+    return false;
+  }
 }
 
 export async function loadTokens(): Promise<Token[] | null> {

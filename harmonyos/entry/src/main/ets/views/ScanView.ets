@@ -25,6 +25,11 @@ export struct ScanView {
   }
 
   private parseOtpUri(uri: string): void {
+    if (!uri.startsWith('otpauth://totp/')) {
+      this.scanErrMsg = '无法识别二维码内容';
+      setTimeout(() => { this.scanErrMsg = ''; }, 2200);
+      return;
+    }
     try {
       const q = uri.split('?')[1] ?? '';
       const params: Record<string, string> = {};
@@ -60,7 +65,13 @@ export struct ScanView {
   private async doScan(enableAlbum: boolean): Promise<void> {
     this.scanning = true;
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
+      const ctx = AppStorage.get<common.UIAbilityContext>('context');
+      if (!ctx) {
+        this.scanErrMsg = '上下文错误，请重启应用';
+        setTimeout(() => { this.scanErrMsg = ''; }, 2200);
+        this.scanning = false;
+        return;
+      }
       const granted = await this.requestCameraPermission(ctx);
       if (!granted) {
         this.scanErrMsg = '需要相机权限才能扫码';

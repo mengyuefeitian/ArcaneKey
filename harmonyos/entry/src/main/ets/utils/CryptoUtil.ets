@@ -140,18 +140,21 @@ function generateSalt(length: number): number[] {
 }
 
 // ── Public API ──────────────────────────────────────────────────
-const MAGIC = [0x45, 0x4E, 0x43, 0x32]; // "ENC2"
+// ENC3: PBKDF2 derives a fixed 32-byte key, then repeating XOR (fast, O(1) PBKDF2 cost)
+// ENC2: PBKDF2 derives key of length = plaintext (legacy, kept for decryption only)
+const MAGIC_V3 = [0x45, 0x4E, 0x43, 0x33]; // "ENC3"
+const MAGIC_V2 = [0x45, 0x4E, 0x43, 0x32]; // "ENC2"
 
 export function encryptData(data: object[], pass: string): string {
   const json = JSON.stringify(data);
   const jsonBytes = utf8Encode(json);
   const salt = generateSalt(16);
-  const key = pbkdf2(pass, salt, 10000, jsonBytes.length);
+  const key = pbkdf2(pass, salt, 10000, 32); // fixed 32-byte key — always 2 PBKDF2 blocks
   const xored: number[] = [];
   for (let i = 0; i < jsonBytes.length; i++) {
-    xored.push(jsonBytes[i] ^ key[i]);
+    xored.push(jsonBytes[i] ^ key[i % 32]);
   }
-  const out = MAGIC.concat(salt).concat(xored);
+  const out = MAGIC_V3.concat(salt).concat(xored);
   const arr = new Uint8Array(out);
   const helper = new util.Base64Helper();
   return helper.encodeToStringSync(arr);
@@ -163,9 +166,24 @@ export function decryptData(enc: string, pass: string): object[] {
   const bytes: number[] = [];
   for (let i = 0; i < decoded.length; i++) bytes.push(decoded[i]);
 
-  // New format with salt
-  if (bytes.length >= 4 && bytes[0] === MAGIC[0] && bytes[1] === MAGIC[1] &&
-      bytes[2] === MAGIC[2] && bytes[3] === MAGIC[3]) {
+  // ENC3: fixed 32-byte key, repeating XOR
+  if (bytes.length >= 4 &&
+      bytes[0] === MAGIC_V3[0] && bytes[1] === MAGIC_V3[1] &&
+      bytes[2] === MAGIC_V3[2] && bytes[3] === MAGIC_V3[3]) {
+    const salt = bytes.slice(4, 20);
+    const cipher = bytes.slice(20);
+    const key = pbkdf2(pass, salt, 10000, 32);
+    const plain: number[] = [];
+    for (let i = 0; i < cipher.length; i++) {
+      plain.push(cipher[i] ^ key[i % 32]);
+    }
+    return JSON.parse(utf8Decode(plain)) as object[];
+  }
+
+  // ENC2 legacy: full-length PBKDF2 key (backward compat for old backups)
+  if (bytes.length >= 4 &&
+      bytes[0] === MAGIC_V2[0] && bytes[1] === MAGIC_V2[1] &&
+      bytes[2] === MAGIC_V2[2] && bytes[3] === MAGIC_V2[3]) {
     const salt = bytes.slice(4, 20);
     const cipher = bytes.slice(20);
     const key = pbkdf2(pass, salt, 10000, cipher.length);
@@ -176,7 +194,7 @@ export function decryptData(enc: string, pass: string): object[] {
     return JSON.parse(utf8Decode(plain)) as object[];
   }
 
-  // Fallback to old XOR format (no salt, no PBKDF2)
+  // Fallback: old simple XOR (no salt, no PBKDF2)
   const keyBytes = utf8Encode(pass);
   const jsonBytes: number[] = [];
   for (let i = 0; i < bytes.length; i++) {
