@@ -1,12 +1,25 @@
 {
   "app": {
     "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "storeFile": "/Users/xiaoan/certs/arcanekey.p12",
+          "storePassword": "0000001A2E771DD04ACA7D1FD6EFBF398B5B03F390CB303841F9C133CE118B54DE15921C4DA244061F11",
+          "keyAlias": "arcanekey",
+          "keyPassword": "0000001A04BA9714CBAA762E23D19052E38B2A967663AD9EC9DB8DBCF1FA780DC543901CF820BF4C5BBC",
+          "signAlg": "SHA256withECDSA",
+          "profile": "/Users/xiaoan/certs/arcanekey_release_profileRelease.p7b",
+          "certpath": "/Users/xiaoan/certs/arcanekey_release0523.cer"
+        }
+      }
     ],
     "products": [
       {
         "name": "default",
         "signingConfig": "default",
-        "compatibleSdkVersion": "6.1.0(23)",
+        "compatibleSdkVersion": "5.0.0(12)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {},
         "targetSdkVersion": "6.1.0(23)",
