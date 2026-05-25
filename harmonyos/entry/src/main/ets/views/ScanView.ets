@@ -5,6 +5,7 @@ import { scanBarcode, scanCore } from '@kit.ScanKit';
 @Component
 export struct ScanView {
   @Prop accentColor: string = '#4080D0';
+  @Prop navBottomPad: number = 110;
   onAdd: (brand: string, account: string, secret: string) => void = () => {};
   onClose: () => void = () => {};
 
@@ -296,5 +297,6 @@ export struct ScanView {
       }
     }
     .width('100%').height('100%').backgroundColor('#0d0d12')
+    .padding({ bottom: this.navBottomPad })
   }
 }

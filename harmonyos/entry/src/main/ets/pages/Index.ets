@@ -1,5 +1,5 @@
 import { pasteboard } from '@kit.BasicServicesKit';
-import { common } from '@kit.AbilityKit';
+import { common, Want } from '@kit.AbilityKit';
 import { window, display } from '@kit.ArkUI';
 import { picker } from '@kit.CoreFileKit';
 import { preferences } from '@kit.ArkData';
@@ -771,6 +771,18 @@ struct Index {
               .fontSize(12).fontColor('rgba(238,238,245,0.45)')
             Span('《隐私保护协议》')
               .fontSize(12).fontColor(this.accentColor).fontWeight(500)
+              .onClick(() => {
+                const ctx = AppStorage.get<common.UIAbilityContext>('context');
+                if (!ctx) return;
+                const want: Want = {
+                  action: 'ohos.want.action.viewData',
+                  uri: 'https://mengyuefeitian.github.io/ArcaneKey/privacy.html',
+                  entities: ['entity.system.browsable'],
+                };
+                ctx.startAbility(want).catch((_: Error) => {
+                  this.toast('无法打开链接');
+                });
+              })
             Span('，授权获取头像、昵称信息')
               .fontSize(12).fontColor('rgba(238,238,245,0.45)')
           }
@@ -1111,6 +1123,7 @@ struct Index {
         TabContent() {
           ScanView({
             accentColor: this.accentColor,
+            navBottomPad: 60 + this.navSafeBottom + 16,
             onAdd: (brand: string, account: string, secret: string) => {
               this.addToken(brand, account, secret);
             },
