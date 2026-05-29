@@ -62,22 +62,25 @@ export async function saveTheme(theme: ThemeItem): Promise<void> {
 
 export interface MemberData {
   isMember: boolean;
-  expiry: string | null;
+  boundAccount: string;
 }
 
 export async function loadMember(): Promise<MemberData> {
   try {
-    if (!pref) return { isMember: false, expiry: null };
+    if (!pref) return { isMember: false, boundAccount: '' };
     const val = await pref.get(MEMBER_KEY, '');
-    if (val && typeof val === 'string' && val !== '') return JSON.parse(val as string) as MemberData;
+    if (val && typeof val === 'string' && val !== '') {
+      const raw = JSON.parse(val as string) as Record<string, string | boolean>;
+      return { isMember: !!raw.isMember, boundAccount: (raw.boundAccount as string) || '' };
+    }
   } catch (_) {}
-  return { isMember: false, expiry: null };
+  return { isMember: false, boundAccount: '' };
 }
 
-export async function saveMember(isMember: boolean, expiry: string | null): Promise<void> {
+export async function saveMember(isMember: boolean, boundAccount: string): Promise<void> {
   try {
     if (!pref) return;
-    await pref.put(MEMBER_KEY, JSON.stringify({ isMember, expiry }));
+    await pref.put(MEMBER_KEY, JSON.stringify({ isMember, boundAccount }));
     await pref.flush();
   } catch (_) {}
 }

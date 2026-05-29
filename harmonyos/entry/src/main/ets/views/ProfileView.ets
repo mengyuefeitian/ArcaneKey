@@ -8,7 +8,7 @@ export struct ProfileView {
   @Prop themeName: string = '海洋蓝';
   @Prop harmonyLogin: boolean = false;
   @Prop isMember: boolean = false;
-  @Prop memberExpiry: string = '';
+  @Prop boundAccount: string = '';
   onLoginTap: () => void = () => {};
   onBindPhone: () => void = () => {};
   onLogout: () => void = () => {};
@@ -94,7 +94,7 @@ export struct ProfileView {
                 .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text(this.isMember ? '会员特权' : '开通会员').fontSize(15).fontColor('#eeeef5').fontWeight(520)
-                Text(this.isMember ? `有效期至 ${this.memberExpiry}` : '¥19.90/年，无限制添加')
+                Text(this.isMember ? '永久会员 · 永久有效' : '¥19.90 · 永久会员，无限制添加')
                   .fontSize(12).fontColor('rgba(238,238,245,0.38)')
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
               Text('›').fontSize(18).fontColor('rgba(238,238,245,0.3)')

@@ -8,6 +8,8 @@ import util from '@ohos.util';
 import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData } from '../utils/StorageUtil';
+import { launchPurchase, restoreOwnedPurchases } from '../utils/IAPUtil';
+import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
 import { HomeView } from '../views/HomeView';
 import { ScanView } from '../views/ScanView';
@@ -72,7 +74,7 @@ struct Index {
 
   // ── Membership ──────────────────────────────────────────────────
   @State isMember: boolean = false;
-  @State memberExpiry: string = '';
+  @State boundAccount: string = '';
 
   // ── Edit Secret Visibility ──────────────────────────────────────
   @State editSecretVisible: boolean = false;
@@ -154,11 +156,20 @@ struct Index {
       if (theme) { this.accentColor = theme.color; this.currentTheme = theme; }
       const member: MemberData = await loadMember();
       this.isMember = member.isMember;
-      this.memberExpiry = member.expiry || '';
+      this.boundAccount = member.boundAccount;
       this.refreshOtp();
       if (this.isMember) {
         this.cloudRestore();
         this.startAutoSync();
+      } else {
+        try {
+          const restored = await restoreOwnedPurchases(ctx);
+          if (restored) {
+            await saveMember(true, this.userName);
+            this.isMember = true;
+            this.boundAccount = this.userName;
+          }
+        } catch (_) {}
       }
     } catch (_) {
       this.tokens = INITIAL_TOKENS.slice();
@@ -410,14 +421,52 @@ struct Index {
     }, 60 * 60 * 1000) as number;
   }
 
-  private buyMembership(): void {
-    // TODO: 生产环境接入微信支付/华为支付
-    const expiry = new Date();
-    expiry.setFullYear(expiry.getFullYear() + 1);
-    this.isMember = true;
-    this.memberExpiry = expiry.toISOString();
-    saveMember(true, expiry.toISOString());
-    this.toast('开通成功（演示）');
+  private async buyMembership(): Promise<void> {
+    if (!this.loggedIn) {
+      this.showLogin = true;
+      return;
+    }
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('系统错误，请重试'); return; }
+    try {
+      await launchPurchase(ctx);
+      await saveMember(true, this.userName);
+      this.isMember = true;
+      this.boundAccount = this.userName;
+      this.toast('开通成功');
+      this.showMembership = false;
+    } catch (e) {
+      const code = (e as { code?: number }).code;
+      if (code === iap.IAPErrorCode.USER_CANCELED) {
+        this.toast('已取消');
+      } else if (code === iap.IAPErrorCode.ACCOUNT_NOT_LOGGED_IN) {
+        this.toast('请先在系统设置中登录华为账号');
+      } else if (code === iap.IAPErrorCode.NETWORK_ERROR) {
+        this.toast('网络异常，请检查网络后重试');
+      } else if (code === iap.IAPErrorCode.PRODUCT_OWNED) {
+        await this.restorePurchase();
+      } else {
+        this.toast(`开通失败（${code ?? '未知'}），请重试`);
+      }
+    }
+  }
+
+  private async restorePurchase(): Promise<void> {
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('系统错误，请重试'); return; }
+    try {
+      const result = await restoreOwnedPurchases(ctx);
+      if (result) {
+        await saveMember(true, this.userName);
+        this.isMember = true;
+        this.boundAccount = this.userName;
+        this.toast('会员已恢复');
+      } else {
+        this.toast('未找到有效购买记录');
+      }
+    } catch (_) {
+      this.toast('恢复失败，请检查网络后重试');
+    }
   }
 
   // ── Builder: Tab Bar Icon ───────────────────────────────────────
@@ -1000,44 +1049,141 @@ struct Index {
       this.modalHeader('开通会员', () => { this.showMembership = false; })
       Scroll() {
         Column({ space: 16 }) {
-          if (this.isMember) {
-            Column({ space: 8 }) {
-              Text('✨ 您已是会员').fontSize(18).fontWeight(700).fontColor(this.accentColor)
-              Text(`有效期至 ${this.memberExpiry}`).fontSize(13).fontColor('rgba(238,238,245,0.5)')
-              Text('享受无限制添加、云端备份、数据同步等特权').fontSize(13).fontColor('rgba(238,238,245,0.5)')
-            }
-            .padding(16).backgroundColor(this.accentColor + '18')
-            .border({ width: 1, color: this.accentColor + '30' }).borderRadius(16).width('100%')
-          } else {
-            Column({ space: 12 }) {
-              Text('👑').fontSize(48)
-              Text('¥19.90').fontSize(36).fontWeight(800).fontColor('#eeeef5')
-              Text('/年').fontSize(14).fontColor('rgba(238,238,245,0.4)')
-            }
-            .alignItems(HorizontalAlign.Center).padding({ top: 32, bottom: 24 }).width('100%')
 
-            // Benefits
-            Column({ space: 12 }) {
-              ForEach(['无限制添加动态口令', '加密备份数据导入导出', '查看 Secret Key', '云端数据每小时自动同步'], (item: string) => {
-                Row({ space: 10 }) {
-                  Text('✓').fontSize(16).fontWeight(700).fontColor(this.accentColor)
-                  Text(item).fontSize(14).fontColor('rgba(238,238,245,0.7)')
-                }.width('100%')
-              }, (item: string) => item)
+          if (this.isMember) {
+            // ── 状态 3：已开通 ────────────────────────────────────────
+            Column({ space: 0 }) {
+              Text('✨').fontSize(32).margin({ bottom: 8 })
+              Text('您已是会员').fontSize(17).fontWeight(700).fontColor(this.accentColor)
+              Text('永久有效').fontSize(12).fontColor('rgba(238,238,245,0.5)').margin({ top: 4 })
             }
-            .padding(16).backgroundColor('#191920').borderRadius(16).width('100%').margin({ bottom: 24 })
+            .width('100%').padding(20).alignItems(HorizontalAlign.Center)
+            .backgroundColor(this.accentColor + '1e')
+            .border({ width: 1, color: this.accentColor + '4d' })
+            .borderRadius(14)
+
+            Column({ space: 6 }) {
+              Text('绑定账号').fontSize(10).fontColor('rgba(238,238,245,0.4)')
+              Row({ space: 10 }) {
+                Stack() {
+                  Text(this.boundAccount.length > 0 ? this.boundAccount[0].toUpperCase() : '鸿')
+                    .fontSize(14).fontColor('#fff').fontWeight(700)
+                }
+                .width(32).height(32).borderRadius(16)
+                .backgroundColor(this.accentColor)
+                Column({ space: 2 }) {
+                  Text(this.boundAccount || '鸿蒙用户').fontSize(13).fontWeight(600).fontColor('#eeeef5')
+                  Text('换设备登录同账号可恢复会员').fontSize(11).fontColor('rgba(238,238,245,0.35)')
+                }.alignItems(HorizontalAlign.Start)
+              }.width('100%')
+            }
+            .padding(12).backgroundColor('#191920').borderRadius(12).width('100%')
+            .alignItems(HorizontalAlign.Start)
 
             Column({ space: 10 }) {
-              Text('🚀 会员功能即将上线').fontSize(16).fontWeight(700).fontColor('#eeeef5')
-              Text('华为支付接入开发中，敬请期待\n感谢您的耐心等候').fontSize(13).fontColor('rgba(238,238,245,0.45)').textAlign(TextAlign.Center)
+              ForEach(
+                ['无限制添加动态口令', '加密备份数据导入导出', '查看 Secret Key', '云端数据自动同步'],
+                (item: string) => {
+                  Row({ space: 8 }) {
+                    Text('✓').fontSize(12).fontWeight(700).fontColor(this.accentColor)
+                    Text(item).fontSize(13).fontColor('rgba(238,238,245,0.7)')
+                  }.width('100%')
+                },
+                (item: string) => item
+              )
             }
-            .width('100%').padding(20).backgroundColor('#191920')
-            .borderRadius(16).border({ width: 1, color: 'rgba(255,255,255,0.07)' })
+            .padding(14).backgroundColor('#191920').borderRadius(14).width('100%')
+
+          } else {
+            // ── 共用：icon + 价格 ─────────────────────────────────────
+            Column() {
+              Text('👑').fontSize(40)
+              Row({ space: 4 }) {
+                Text('¥19.90').fontSize(28).fontWeight(800).fontColor('#eeeef5')
+                Text('永久会员').fontSize(12).fontColor('rgba(238,238,245,0.4)')
+              }
+              .alignItems(VerticalAlign.Bottom)
+              .margin({ top: 6 })
+            }
             .alignItems(HorizontalAlign.Center)
+            .padding({ top: 24, bottom: 20 })
+            .width('100%')
+
+            // ── 共用：权益列表 ────────────────────────────────────────
+            Column({ space: 10 }) {
+              ForEach(
+                ['无限制添加动态口令', '加密备份数据导入导出', '查看 Secret Key', '云端数据自动同步'],
+                (item: string) => {
+                  Row({ space: 8 }) {
+                    Text('✓').fontSize(12).fontWeight(700).fontColor(this.accentColor)
+                    Text(item).fontSize(13).fontColor('rgba(238,238,245,0.7)')
+                  }.width('100%')
+                },
+                (item: string) => item
+              )
+            }
+            .padding(14).backgroundColor('#191920').borderRadius(14).width('100%')
+
+            if (!this.loggedIn) {
+              // ── 状态 1：未登录 ──────────────────────────────────────
+              Column({ space: 4 }) {
+                Text('购买会员需要先登录').fontSize(12).fontColor('rgba(238,238,245,0.55)')
+                Text('会员将绑定至您的鸿蒙账号').fontSize(11).fontColor('rgba(238,238,245,0.35)')
+              }
+              .width('100%').padding(10).alignItems(HorizontalAlign.Center)
+              .backgroundColor(this.accentColor + '1a')
+              .border({ width: 1, color: this.accentColor + '40' })
+              .borderRadius(10)
+
+              Button('登录后开通')
+                .width('100%').height(50).borderRadius(15)
+                .backgroundColor(this.accentColor).fontColor('#fff')
+                .fontSize(15).fontWeight(650)
+                .onClick(() => {
+                  this.showMembership = false;
+                  this.loginPhone = '';
+                  this.loginCode = '';
+                  this.loginCodeSent = false;
+                  this.loginCodeCd = 0;
+                  this.showLogin = true;
+                })
+
+            } else {
+              // ── 状态 2：已登录 · 未开通 ─────────────────────────────
+              Row({ space: 8 }) {
+                Text('👤').fontSize(16)
+                Column({ space: 2 }) {
+                  Text('购买后绑定至').fontSize(10).fontColor('rgba(238,238,245,0.5)')
+                  Text(this.userName || '鸿蒙用户').fontSize(12).fontWeight(600).fontColor('#eeeef5')
+                }.alignItems(HorizontalAlign.Start)
+              }
+              .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .backgroundColor(this.accentColor + '14')
+              .border({ width: 1, color: this.accentColor + '33' })
+              .borderRadius(10)
+
+              Column({ space: 8 }) {
+                Button('立即开通会员')
+                  .width('100%').height(50).borderRadius(15)
+                  .backgroundColor(this.accentColor).fontColor('#fff')
+                  .fontSize(15).fontWeight(650)
+                  .onClick(() => { this.buyMembership(); })
+
+                Row() {
+                  Text('换机后可用同一账号 ').fontSize(11).fontColor('rgba(238,238,245,0.3)')
+                  Text('恢复购买')
+                    .fontSize(11).fontColor(this.accentColor)
+                    .onClick(() => { this.restorePurchase(); })
+                }
+                .justifyContent(FlexAlign.Center).width('100%')
+              }
+            }
           }
+
         }
         .padding({ left: 20, right: 20, bottom: 40 })
-      }.scrollBar(BarState.Off).flexGrow(1)
+      }
+      .scrollBar(BarState.Off).flexGrow(1)
     }
     .width('100%').height('100%').backgroundColor('#0d0d12')
     .padding({ top: 44 })
@@ -1142,7 +1288,7 @@ struct Index {
             themeName: this.currentTheme.name,
             harmonyLogin: this.harmonyLogin,
             isMember: this.isMember,
-            memberExpiry: this.memberExpiry,
+            boundAccount: this.boundAccount,
             onLoginTap: () => {
               this.loginPhone = ''; this.loginCode = ''; this.loginCodeSent = false; this.loginCodeCd = 0;
               this.loginNickname = '';
