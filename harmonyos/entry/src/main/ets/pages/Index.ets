@@ -21,6 +21,10 @@ interface SaveOptions {
   newFileNames: string[];
 }
 
+interface IapError {
+  code: number;
+}
+
 @Entry
 @Component
 struct Index {
@@ -436,7 +440,7 @@ struct Index {
       this.toast('开通成功');
       this.showMembership = false;
     } catch (e) {
-      const code = (e as { code?: number }).code;
+      const code = (e as IapError).code;
       if (code === iap.IAPErrorCode.USER_CANCELED) {
         this.toast('已取消');
       } else if (code === iap.IAPErrorCode.ACCOUNT_NOT_LOGGED_IN) {

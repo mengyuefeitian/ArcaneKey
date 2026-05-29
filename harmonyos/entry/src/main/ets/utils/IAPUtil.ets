@@ -9,6 +9,10 @@ interface PurchasePayload {
   orderId?: string;
 }
 
+export interface PurchaseTokenResult {
+  purchaseToken: string;
+}
+
 export async function queryProductInfo(context: common.UIAbilityContext): Promise<iap.Product> {
   const products = await iap.queryProducts(context, {
     productType: iap.ProductType.NONCONSUMABLE,
@@ -20,18 +24,19 @@ export async function queryProductInfo(context: common.UIAbilityContext): Promis
   return products[0];
 }
 
-export async function launchPurchase(context: common.UIAbilityContext): Promise<{ purchaseToken: string }> {
+export async function launchPurchase(context: common.UIAbilityContext): Promise<PurchaseTokenResult> {
   const result = await iap.createPurchase(context, {
     productType: iap.ProductType.NONCONSUMABLE,
     productId: MEMBER_PRODUCT_ID,
   });
   const payload = JSON.parse(result.purchaseData) as PurchasePayload;
-  return { purchaseToken: payload.purchaseToken ?? '' };
+  const token: PurchaseTokenResult = { purchaseToken: payload.purchaseToken ?? '' };
+  return token;
 }
 
 export async function restoreOwnedPurchases(
   context: common.UIAbilityContext
-): Promise<{ purchaseToken: string } | null> {
+): Promise<PurchaseTokenResult | null> {
   const result = await iap.queryPurchases(context, {
     productType: iap.ProductType.NONCONSUMABLE,
     queryType: iap.PurchaseQueryType.CURRENT_ENTITLEMENT,
@@ -42,7 +47,8 @@ export async function restoreOwnedPurchases(
   for (const data of result.purchaseDataList) {
     const payload = JSON.parse(data) as PurchasePayload;
     if (payload.productId === MEMBER_PRODUCT_ID) {
-      return { purchaseToken: payload.purchaseToken ?? '' };
+      const token: PurchaseTokenResult = { purchaseToken: payload.purchaseToken ?? '' };
+      return token;
     }
   }
   return null;
