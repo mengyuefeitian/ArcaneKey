@@ -1,4 +1,5 @@
 import { pasteboard } from '@kit.BasicServicesKit';
+import account_osAccount from '@ohos.account.osAccount';
 import { common, Want } from '@kit.AbilityKit';
 import { window, display } from '@kit.ArkUI';
 import { picker } from '@kit.CoreFileKit';
@@ -260,6 +261,28 @@ struct Index {
       pasteboard.getSystemPasteboard().setData(data);
       this.toast(`已复制 ${brand} 验证码`);
     } catch (_) { this.toast('复制失败'); }
+  }
+
+  private async doHarmonyLogin(): Promise<void> {
+    if (!this.privacyAgreed) { this.toast('请先同意隐私保护协议'); return; }
+    let name = '鸿蒙用户';
+    try {
+      const mgr = account_osAccount.getAccountManager();
+      const info = await mgr.getCurrentOsAccount();
+      const distributed = info.distributedInfo;
+      if (distributed && distributed.name && distributed.name !== 'ohosAnonymousName') {
+        name = distributed.name;
+      } else if (info.localName && info.localName.length > 0) {
+        name = info.localName;
+      }
+    } catch (_) {}
+    this.loggedIn = true;
+    this.userName = name;
+    this.userPhone = '';
+    this.harmonyLogin = true;
+    this.showLogin = false;
+    this.privacyAgreed = false;
+    this.toast('鸿蒙账号登录成功');
   }
 
   private doLogin(): void {
@@ -851,19 +874,7 @@ struct Index {
           .backgroundColor(this.privacyAgreed ? this.accentColor : '#191920')
           .fontColor(this.privacyAgreed ? '#fff' : 'rgba(238,238,245,0.3)')
           .fontSize(15).fontWeight(650)
-          .onClick(() => {
-            if (!this.privacyAgreed) {
-              this.toast('请先同意隐私保护协议');
-              return;
-            }
-            this.loggedIn = true;
-            this.userName = '鸿蒙用户';
-            this.userPhone = '';
-            this.harmonyLogin = true;
-            this.showLogin = false;
-            this.privacyAgreed = false;
-            this.toast('鸿蒙账号登录成功');
-          })
+          .onClick(() => { this.doHarmonyLogin(); })
         Text('将使用设备上的鸿蒙账号信息')
           .fontSize(11).fontColor('rgba(238,238,245,0.3)').textAlign(TextAlign.Center)
       }
