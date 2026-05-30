@@ -1,5 +1,5 @@
 import { pasteboard } from '@kit.BasicServicesKit';
-import distributedAccount from '@ohos.account.distributedAccount';
+import { authentication } from '@kit.AccountKit';
 import { common, Want } from '@kit.AbilityKit';
 import { window, display } from '@kit.ArkUI';
 import { picker } from '@kit.CoreFileKit';
@@ -265,21 +265,36 @@ struct Index {
 
   private async doHarmonyLogin(): Promise<void> {
     if (!this.privacyAgreed) { this.toast('请先同意隐私保护协议'); return; }
-    let name = '华为用户';
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
-      const ability = distributedAccount.getDistributedAccountAbility();
-      const info = await ability.getOsAccountDistributedInfo();
-      if (info && info.name && info.name !== 'ohosAnonymousName') {
-        name = info.name;
+      const request = new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
+      request.scopes = ['profile'];
+      request.forceAuthorization = false;
+      const controller = new authentication.AuthenticationController(ctx);
+      const resp = await controller.executeRequest(request);
+      const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
+      this.loggedIn = true;
+      this.userName = cred?.nickName || '华为用户';
+      this.userAvatar = cred?.avatarUri || '';
+      this.harmonyLogin = true;
+      this.showLogin = false;
+      this.privacyAgreed = false;
+      this.toast('鸿蒙账号登录成功');
+    } catch (e) {
+      const code = (e as IapError).code;
+      if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
+        this.toast('已取消登录');
+      } else {
+        this.loggedIn = true;
+        this.userName = '华为用户';
+        this.userAvatar = '';
+        this.harmonyLogin = true;
+        this.showLogin = false;
+        this.privacyAgreed = false;
+        this.toast('鸿蒙账号登录成功');
       }
-    } catch (_) {}
-    this.loggedIn = true;
-    this.userName = name;
-    this.userPhone = '';
-    this.harmonyLogin = true;
-    this.showLogin = false;
-    this.privacyAgreed = false;
-    this.toast('鸿蒙账号登录成功');
+    }
   }
 
   private doLogin(): void {

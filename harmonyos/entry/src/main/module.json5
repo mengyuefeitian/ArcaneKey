@@ -34,14 +34,6 @@
           "abilities": ["EntryAbility"],
           "when": "inuse"
         }
-      },
-      {
-        "name": "ohos.permission.DISTRIBUTED_DATASYNC",
-        "reason": "$string:distributed_datasync_reason",
-        "usedScene": {
-          "abilities": ["EntryAbility"],
-          "when": "inuse"
-        }
       }
     ]
   }
