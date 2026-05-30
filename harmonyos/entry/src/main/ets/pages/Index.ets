@@ -295,7 +295,7 @@ struct Index {
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-        this.toast('已登录（账号信息获取失败）');
+        this.toast('鸿蒙账号登录成功');
       }
     }
   }

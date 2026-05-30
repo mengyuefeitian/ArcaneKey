@@ -19,6 +19,11 @@ export struct ScanView {
   @State scanning: boolean = false;
   @State scanErrMsg: string = '';
 
+  aboutToAppear(): void {
+    // Auto-launch camera when scan view opens
+    setTimeout(() => { this.doScan(false); }, 200);
+  }
+
   private validate(): boolean {
     this.brandErr = this.brand.trim() ? '' : '请输入品牌名称';
     this.secretErr = this.secret.trim() ? '' : '请输入 Secret Key';
@@ -191,7 +196,7 @@ export struct ScanView {
             .width('64%').height('64%')
             .position({ x: '18%', y: '18%' })
           }
-          .width('100%').constraintSize({ maxWidth: 310 }).alignContent(Alignment.TopStart)
+          .width('100%').constraintSize({ maxWidth: 310 }).aspectRatio(1).alignContent(Alignment.TopStart)
 
           Text(this.scanning ? '正在识别二维码…' : '点击下方按钮扫描二维码')
             .fontSize(13).fontColor('rgba(238,238,245,0.4)').textAlign(TextAlign.Center)
