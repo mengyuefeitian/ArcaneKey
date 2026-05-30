@@ -283,7 +283,8 @@ struct Index {
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-      this.toast('鸿蒙账号登录成功');
+      // DIAG: show which path ran and what credential returned
+      this.toast(`[OK] nick=${cred?.nickName ?? 'null'} avatar=${cred?.avatarUri ? 'yes' : 'null'}`);
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
@@ -295,7 +296,8 @@ struct Index {
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-        this.toast('鸿蒙账号登录成功');
+        // DIAG: show actual error code
+        this.toast(`[ERR] code=${code}`);
       }
     }
   }
