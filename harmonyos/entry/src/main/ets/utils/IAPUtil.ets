@@ -14,16 +14,6 @@ export interface PurchaseTokenResult {
   purchaseOrderId: string;
 }
 
-export async function queryProductInfo(context: common.UIAbilityContext): Promise<iap.Product> {
-  const products = await iap.queryProducts(context, {
-    productType: iap.ProductType.NONCONSUMABLE,
-    productIds: [MEMBER_PRODUCT_ID],
-  });
-  if (!products || products.length === 0) {
-    throw new Error('商品信息查询为空');
-  }
-  return products[0];
-}
 
 export async function launchPurchase(context: common.UIAbilityContext): Promise<PurchaseTokenResult> {
   const result = await iap.createPurchase(context, {
@@ -43,6 +33,9 @@ export async function acknowledgePurchase(
   purchaseToken: string,
   purchaseOrderId: string
 ): Promise<void> {
+  if (!purchaseToken || !purchaseOrderId) {
+    throw new Error('acknowledgePurchase: missing purchaseToken or purchaseOrderId');
+  }
   await iap.finishPurchase(context, {
     productType: iap.ProductType.NONCONSUMABLE,
     purchaseToken: purchaseToken,

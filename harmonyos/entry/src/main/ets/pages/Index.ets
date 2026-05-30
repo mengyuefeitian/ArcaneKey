@@ -170,9 +170,12 @@ struct Index {
         try {
           const restored = await restoreOwnedPurchases(ctx);
           if (restored) {
-            await saveMember(true, this.userName);
+            // Preserve existing boundAccount — this.userName is '' at cold-start
+            if (!member.isMember) {
+              await saveMember(true, member.boundAccount);
+            }
             this.isMember = true;
-            this.boundAccount = this.userName;
+            this.boundAccount = member.boundAccount;
           }
         } catch (_) {}
       }
@@ -292,7 +295,7 @@ struct Index {
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-        this.toast('鸿蒙账号登录成功');
+        this.toast('已登录（账号信息获取失败）');
       }
     }
   }
@@ -498,9 +501,10 @@ struct Index {
     try {
       const result = await restoreOwnedPurchases(ctx);
       if (result) {
-        await saveMember(true, this.userName);
+        const bound = this.userName || this.boundAccount;
+        await saveMember(true, bound);
         this.isMember = true;
-        this.boundAccount = this.userName;
+        this.boundAccount = bound;
         this.toast('会员已恢复');
       } else {
         this.toast('未找到有效购买记录');
@@ -1002,6 +1006,23 @@ struct Index {
 
   // ── Builder: Theme Modal ────────────────────────────────────────
   @Builder
+  memberBenefits() {
+    Column({ space: 10 }) {
+      ForEach(
+        ['无限制添加动态口令', '加密备份数据导入导出', '查看 Secret Key', '云端数据自动同步'],
+        (item: string) => {
+          Row({ space: 8 }) {
+            Text('✓').fontSize(12).fontWeight(700).fontColor(this.accentColor)
+            Text(item).fontSize(13).fontColor('rgba(238,238,245,0.7)')
+          }.width('100%')
+        },
+        (item: string) => item
+      )
+    }
+    .padding(14).backgroundColor('#191920').borderRadius(14).width('100%')
+  }
+
+  @Builder
   themeModal() {
     Column() {
       this.modalHeader('皮肤主题', () => { this.showTheme = false; })
@@ -1109,19 +1130,7 @@ struct Index {
             .padding(12).backgroundColor('#191920').borderRadius(12).width('100%')
             .alignItems(HorizontalAlign.Start)
 
-            Column({ space: 10 }) {
-              ForEach(
-                ['无限制添加动态口令', '加密备份数据导入导出', '查看 Secret Key', '云端数据自动同步'],
-                (item: string) => {
-                  Row({ space: 8 }) {
-                    Text('✓').fontSize(12).fontWeight(700).fontColor(this.accentColor)
-                    Text(item).fontSize(13).fontColor('rgba(238,238,245,0.7)')
-                  }.width('100%')
-                },
-                (item: string) => item
-              )
-            }
-            .padding(14).backgroundColor('#191920').borderRadius(14).width('100%')
+            this.memberBenefits()
 
           } else {
             // ── 共用：icon + 价格 ─────────────────────────────────────
@@ -1139,19 +1148,7 @@ struct Index {
             .width('100%')
 
             // ── 共用：权益列表 ────────────────────────────────────────
-            Column({ space: 10 }) {
-              ForEach(
-                ['无限制添加动态口令', '加密备份数据导入导出', '查看 Secret Key', '云端数据自动同步'],
-                (item: string) => {
-                  Row({ space: 8 }) {
-                    Text('✓').fontSize(12).fontWeight(700).fontColor(this.accentColor)
-                    Text(item).fontSize(13).fontColor('rgba(238,238,245,0.7)')
-                  }.width('100%')
-                },
-                (item: string) => item
-              )
-            }
-            .padding(14).backgroundColor('#191920').borderRadius(14).width('100%')
+            this.memberBenefits()
 
             if (!this.loggedIn) {
               // ── 状态 1：未登录 ──────────────────────────────────────
