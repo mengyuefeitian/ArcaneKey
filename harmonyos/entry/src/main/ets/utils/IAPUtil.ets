@@ -63,7 +63,7 @@ export async function restoreOwnedPurchases(
   for (const data of result.purchaseDataList) {
     const payload = JSON.parse(data) as PurchasePayload;
     if (payload.productId === MEMBER_PRODUCT_ID) {
-      const token: PurchaseTokenResult = { purchaseToken: payload.purchaseToken ?? '' };
+      const token: PurchaseTokenResult = { purchaseToken: payload.purchaseToken ?? '', purchaseOrderId: payload.orderId ?? '' };
       return token;
     }
   }
