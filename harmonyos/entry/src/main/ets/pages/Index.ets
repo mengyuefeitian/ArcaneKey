@@ -271,18 +271,19 @@ struct Index {
     const ctx = AppStorage.get<common.UIAbilityContext>('context');
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
-      const request = new authentication.HuaweiIDProvider().createLoginWithHuaweiIDRequest();
+      const request = new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
+      request.scopes = ['openid', 'profile'];
+      request.forceAuthorization = true;
       const controller = new authentication.AuthenticationController(ctx);
       const resp = await controller.executeRequest(request);
-      const cred = (resp as authentication.LoginWithHuaweiIDResponse).data;
-      const openId = cred?.openID ?? '';
+      const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
       this.loggedIn = true;
-      this.userName = openId.length > 6 ? `用户${openId.slice(-6)}` : '华为用户';
-      this.userAvatar = '';
+      this.userName = cred?.nickName || '华为用户';
+      this.userAvatar = cred?.avatarUri || '';
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-      this.toast('鸿蒙账号登录成功');
+      this.toast(`[OK] nick=${cred?.nickName ?? 'null'}`);
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
@@ -294,7 +295,7 @@ struct Index {
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-        this.toast('鸿蒙账号登录成功');
+        this.toast(`[ERR] code=${code}`);
       }
     }
   }
