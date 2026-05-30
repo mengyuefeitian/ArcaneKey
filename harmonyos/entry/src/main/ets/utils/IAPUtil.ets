@@ -11,6 +11,7 @@ interface PurchasePayload {
 
 export interface PurchaseTokenResult {
   purchaseToken: string;
+  purchaseOrderId: string;
 }
 
 export async function queryProductInfo(context: common.UIAbilityContext): Promise<iap.Product> {
@@ -30,17 +31,22 @@ export async function launchPurchase(context: common.UIAbilityContext): Promise<
     productId: MEMBER_PRODUCT_ID,
   });
   const payload = JSON.parse(result.purchaseData) as PurchasePayload;
-  const token: PurchaseTokenResult = { purchaseToken: payload.purchaseToken ?? '' };
+  const token: PurchaseTokenResult = {
+    purchaseToken: payload.purchaseToken ?? '',
+    purchaseOrderId: payload.orderId ?? '',
+  };
   return token;
 }
 
 export async function acknowledgePurchase(
   context: common.UIAbilityContext,
-  purchaseToken: string
+  purchaseToken: string,
+  purchaseOrderId: string
 ): Promise<void> {
   await iap.finishPurchase(context, {
     productType: iap.ProductType.NONCONSUMABLE,
     purchaseToken: purchaseToken,
+    purchaseOrderId: purchaseOrderId,
   });
 }
 

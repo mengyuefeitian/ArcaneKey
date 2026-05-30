@@ -440,7 +440,7 @@ struct Index {
       this.toast('开通成功');
       this.showMembership = false;
       // Acknowledge purchase to prevent auto-refund after 24h
-      try { await acknowledgePurchase(ctx, tokenResult.purchaseToken); } catch (_) {}
+      try { await acknowledgePurchase(ctx, tokenResult.purchaseToken, tokenResult.purchaseOrderId); } catch (_) {}
     } catch (e) {
       const code = (e as IapError).code;
       if (code === iap.IAPErrorCode.USER_CANCELED) {
