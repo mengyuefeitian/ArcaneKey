@@ -282,7 +282,7 @@ struct Index {
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-      this.toast(`[OK] openID=${openId.slice(-8)}`);
+      this.toast('鸿蒙账号登录成功');
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
@@ -294,7 +294,7 @@ struct Index {
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-        this.toast(`[ERR] code=${code}`);
+        this.toast('鸿蒙账号登录成功');
       }
     }
   }
