@@ -3,6 +3,7 @@
     { "name": "module_desc", "value": "星枢令身份验证器模块" },
     { "name": "EntryAbility_desc", "value": "星枢令" },
     { "name": "EntryAbility_label", "value": "星枢令" },
-    { "name": "camera_reason", "value": "扫描二维码需要使用相机" }
+    { "name": "camera_reason", "value": "扫描二维码需要使用相机" },
+    { "name": "distributed_datasync_reason", "value": "读取华为账号信息用于登录展示" }
   ]
 }
