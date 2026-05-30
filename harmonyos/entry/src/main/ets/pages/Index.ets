@@ -271,20 +271,18 @@ struct Index {
     const ctx = AppStorage.get<common.UIAbilityContext>('context');
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
-      const request = new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
-      request.scopes = ['profile'];
-      request.forceAuthorization = false;
+      const request = new authentication.HuaweiIDProvider().createLoginWithHuaweiIDRequest();
       const controller = new authentication.AuthenticationController(ctx);
       const resp = await controller.executeRequest(request);
-      const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
+      const cred = (resp as authentication.LoginWithHuaweiIDResponse).data;
+      const openId = cred?.openID ?? '';
       this.loggedIn = true;
-      this.userName = cred?.nickName || '华为用户';
-      this.userAvatar = cred?.avatarUri || '';
+      this.userName = openId.length > 6 ? `用户${openId.slice(-6)}` : '华为用户';
+      this.userAvatar = '';
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-      // DIAG: show which path ran and what credential returned
-      this.toast(`[OK] nick=${cred?.nickName ?? 'null'} avatar=${cred?.avatarUri ? 'yes' : 'null'}`);
+      this.toast(`[OK] openID=${openId.slice(-8)}`);
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
@@ -296,7 +294,6 @@ struct Index {
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-        // DIAG: show actual error code
         this.toast(`[ERR] code=${code}`);
       }
     }
