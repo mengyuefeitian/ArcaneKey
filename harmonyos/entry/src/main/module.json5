@@ -36,7 +36,7 @@
         }
       },
       {
-        "name": "ohos.permission.GET_LOCAL_ACCOUNTS"
+        "name": "ohos.permission.DISTRIBUTED_DATASYNC"
       }
     ]
   }

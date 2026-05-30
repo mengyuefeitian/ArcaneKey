@@ -1,5 +1,5 @@
 import { pasteboard } from '@kit.BasicServicesKit';
-import account_osAccount from '@ohos.account.osAccount';
+import distributedAccount from '@ohos.account.distributedAccount';
 import { common, Want } from '@kit.AbilityKit';
 import { window, display } from '@kit.ArkUI';
 import { picker } from '@kit.CoreFileKit';
@@ -265,15 +265,12 @@ struct Index {
 
   private async doHarmonyLogin(): Promise<void> {
     if (!this.privacyAgreed) { this.toast('请先同意隐私保护协议'); return; }
-    let name = '鸿蒙用户';
+    let name = '华为用户';
     try {
-      const mgr = account_osAccount.getAccountManager();
-      const info = await mgr.getCurrentOsAccount();
-      const distributed = info.distributedInfo;
-      if (distributed && distributed.name && distributed.name !== 'ohosAnonymousName') {
-        name = distributed.name;
-      } else if (info.localName && info.localName.length > 0) {
-        name = info.localName;
+      const ability = distributedAccount.getDistributedAccountAbility();
+      const info = await ability.getOsAccountDistributedInfo();
+      if (info && info.name && info.name !== 'ohosAnonymousName') {
+        name = info.name;
       }
     } catch (_) {}
     this.loggedIn = true;
