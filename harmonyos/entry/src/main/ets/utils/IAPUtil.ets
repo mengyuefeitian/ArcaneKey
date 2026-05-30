@@ -34,6 +34,16 @@ export async function launchPurchase(context: common.UIAbilityContext): Promise<
   return token;
 }
 
+export async function acknowledgePurchase(
+  context: common.UIAbilityContext,
+  purchaseToken: string
+): Promise<void> {
+  await iap.finishPurchase(context, {
+    productType: iap.ProductType.NONCONSUMABLE,
+    purchaseToken: purchaseToken,
+  });
+}
+
 export async function restoreOwnedPurchases(
   context: common.UIAbilityContext
 ): Promise<PurchaseTokenResult | null> {

@@ -8,7 +8,7 @@ import util from '@ohos.util';
 import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData } from '../utils/StorageUtil';
-import { launchPurchase, restoreOwnedPurchases } from '../utils/IAPUtil';
+import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
 import { HomeView } from '../views/HomeView';
@@ -433,12 +433,14 @@ struct Index {
     const ctx = AppStorage.get<common.UIAbilityContext>('context');
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
-      await launchPurchase(ctx);
+      const tokenResult = await launchPurchase(ctx);
       await saveMember(true, this.userName);
       this.isMember = true;
       this.boundAccount = this.userName;
       this.toast('开通成功');
       this.showMembership = false;
+      // Acknowledge purchase to prevent auto-refund after 24h
+      try { await acknowledgePurchase(ctx, tokenResult.purchaseToken); } catch (_) {}
     } catch (e) {
       const code = (e as IapError).code;
       if (code === iap.IAPErrorCode.USER_CANCELED) {
