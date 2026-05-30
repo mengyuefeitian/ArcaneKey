@@ -298,5 +298,6 @@ export struct ScanView {
     }
     .width('100%').height('100%').backgroundColor('#0d0d12')
     .padding({ bottom: this.navBottomPad })
+    .clip(true)
   }
 }
