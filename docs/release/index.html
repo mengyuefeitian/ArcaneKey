@@ -60,10 +60,42 @@ h2{font-size:clamp(32px,5vw,56px);font-weight:700;letter-spacing:-.02em;line-hei
 .btn-primary:hover{background:var(--accent-2)}
 .btn-ghost{background:transparent;color:var(--accent);font-weight:500;padding:14px 8px}
 .btn-light{background:#fff;color:var(--text-dark)}
+
+/* ===== 顶部导航 ===== */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:52px;display:flex;align-items:center;
+  background:rgba(251,251,253,.72);
+  backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid rgba(0,0,0,.08);
+}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;width:100%}
+.nav-brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:17px}
+.nav-logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#7b4dd0);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700}
+.nav-links{display:flex;align-items:center;gap:28px;font-size:14px;color:var(--text-dark)}
+.nav-links a{opacity:.85;transition:opacity .2s}
+.nav-links a:hover{opacity:1}
+.nav-cta{padding:6px 16px;border-radius:980px;background:var(--accent);color:#fff;font-size:13px}
+.nav-cta:hover{background:var(--accent-2)}
+body{padding-top:52px}
+@media(max-width:680px){.nav-links a:not(.nav-cta){display:none}}
 </style>
 </head>
 <body>
-<!-- 章节将按计划逐个加入此处 -->
+<header class="nav">
+  <div class="wrap">
+    <a class="nav-brand" href="#top"><span class="nav-logo">星</span>星枢令</a>
+    <nav class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#platforms">平台</a>
+      <a href="#privacy">隐私</a>
+      <a class="nav-cta" href="#get">获取</a>
+    </nav>
+  </div>
+</header>
+<!-- HERO -->
 
 <script>
 /* 交互脚本将在最后任务加入 */
