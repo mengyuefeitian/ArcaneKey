@@ -178,6 +178,22 @@ body{padding-top:52px}
 .plat li{color:#aeaeb2;font-size:16px;padding:8px 0 8px 26px;position:relative}
 .plat li::before{content:"✓";position:absolute;left:0;color:var(--accent-2);font-weight:700}
 @media(max-width:768px){.plats{grid-template-columns:1fr}}
+
+/* ===== 获取 ===== */
+.get{text-align:center}
+.get h2{margin-bottom:14px}
+.get-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:56px;text-align:center}
+.get-card{background:#fff;border-radius:24px;padding:36px 28px;border:1px solid rgba(0,0,0,.06);
+  box-shadow:0 4px 24px rgba(0,0,0,.04);display:flex;flex-direction:column;align-items:center;gap:14px}
+.get-card h3{font-size:19px;font-weight:600}
+.get-card p{color:var(--muted-dark);font-size:14px;flex:1}
+/* 二维码占位 */
+.qr-ph{width:120px;height:120px;border-radius:16px;
+  background:repeating-conic-gradient(#1d1d1f 0 25%,#fff 0 50%) 0/24px 24px;
+  border:1px solid rgba(0,0,0,.1)}
+.store-ph{width:120px;height:120px;border-radius:16px;background:#f0f0f3;
+  display:flex;align-items:center;justify-content:center;font-size:48px}
+@media(max-width:768px){.get-cards{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -343,7 +359,38 @@ body{padding-top:52px}
     </div>
   </div>
 </section>
-<!-- GET -->
+<section class="sec-light get" id="get">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="eyebrow">现在开始</p>
+      <h2>获取星枢令</h2>
+      <p class="lead">开源、免费、本地优先。</p>
+    </div>
+    <div class="get-cards">
+      <div class="get-card reveal">
+        <div class="store-ph">🐙</div>
+        <h3>GitHub</h3>
+        <p>查看源码、下载发布版、参与共建。MIT 开源。</p>
+        <a class="btn btn-primary" href="https://github.com/mengyuefeitian/ArcaneKey" target="_blank" rel="noopener">前往仓库</a>
+      </div>
+      <div class="get-card reveal">
+        <!-- TODO: 替换为真实微信小程序码图片 -->
+        <div class="qr-ph"></div>
+        <h3>微信小程序</h3>
+        <p>微信搜索「星枢令」，免安装即用。</p>
+        <a class="btn btn-light" style="border:1px solid rgba(0,0,0,.1)" href="#">扫码进入</a>
+      </div>
+      <div class="get-card reveal">
+        <div class="store-ph">📱</div>
+        <h3>鸿蒙 App</h3>
+        <p>HarmonyOS 应用市场（即将上架）。</p>
+        <!-- TODO: 替换为真实鸿蒙应用市场链接 -->
+        <a class="btn btn-light" style="border:1px solid rgba(0,0,0,.1)" href="#">应用市场</a>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- FOOTER -->
 
 <script>
 /* 交互脚本将在最后任务加入 */
