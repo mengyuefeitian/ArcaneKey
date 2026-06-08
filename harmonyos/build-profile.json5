@@ -6,9 +6,9 @@
         "type": "HarmonyOS",
         "material": {
           "storeFile": "/Users/xiaoan/certs/arcanekey.p12",
-          "storePassword": "0000001A2E771DD04ACA7D1FD6EFBF398B5B03F390CB303841F9C133CE118B54DE15921C4DA244061F11",
-          "keyAlias": "arcanekey",
-          "keyPassword": "0000001A04BA9714CBAA762E23D19052E38B2A967663AD9EC9DB8DBCF1FA780DC543901CF820BF4C5BBC",
+          "storePassword": "0000001AFBE94045CCB676B3A958D002EA63CE46604752ECEF6910A9CB3B28820FA1793346093810CEA6",
+          "keyAlias": "arcaneKey",
+          "keyPassword": "0000001AC107B116E26059137981FD8E0137E39027184EBAF0D70E024AA08B8EA85705AD5D569E4DFB57",
           "signAlg": "SHA256withECDSA",
           "profile": "/Users/xiaoan/certs/arcanekey_release_profileRelease.p7b",
           "certpath": "/Users/xiaoan/certs/arcanekey_release0523.cer"
