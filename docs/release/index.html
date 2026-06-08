@@ -81,6 +81,51 @@ h2{font-size:clamp(32px,5vw,56px);font-weight:700;letter-spacing:-.02em;line-hei
 .nav-cta:hover{background:var(--accent-2)}
 body{padding-top:52px}
 @media(max-width:680px){.nav-links a:not(.nav-cta){display:none}}
+
+/* ===== 手机模型组件 ===== */
+.device{
+  position:relative;width:300px;flex:0 0 300px;
+  border-radius:54px;padding:12px;
+  background:linear-gradient(160deg,#3a3a40,#15151a);
+  box-shadow:0 40px 90px rgba(0,0,0,.55),0 0 80px var(--accent-glow);
+}
+.device-screen{
+  position:relative;border-radius:44px;overflow:hidden;
+  background:var(--bg-dark);height:600px;padding:54px 16px 16px;
+}
+.island{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  width:96px;height:28px;background:#000;border-radius:20px}
+.app-title{color:var(--text-light);font-size:22px;font-weight:700;margin:0 6px 18px}
+/* 验证码卡片 */
+.tk{display:flex;align-items:center;gap:12px;background:var(--card-dark);
+  border-radius:18px;padding:14px;margin-bottom:12px}
+.tk-avatar{width:42px;height:42px;border-radius:50%;flex:0 0 42px;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px}
+.tk-info{flex:1;min-width:0}
+.tk-name{color:var(--text-light);font-size:15px;font-weight:600}
+.tk-acct{color:#86868b;font-size:12px}
+.tk-code{color:var(--accent-2);font-size:20px;font-weight:700;letter-spacing:.06em;
+  font-variant-numeric:tabular-nums;margin-top:2px}
+/* 倒计时环 */
+.ring{width:34px;height:34px;border-radius:50%;flex:0 0 34px;
+  background:conic-gradient(var(--accent) var(--p,75%),rgba(255,255,255,.12) 0);
+  display:flex;align-items:center;justify-content:center}
+.ring::after{content:"";width:26px;height:26px;border-radius:50%;background:var(--card-dark)}
+/* 底部悬浮胶囊导航 */
+.app-nav{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
+  width:80%;height:52px;border-radius:26px;display:flex;align-items:center;justify-content:space-around;
+  background:rgba(40,40,48,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.08)}
+.app-nav span{width:22px;height:22px;border-radius:6px;background:rgba(255,255,255,.25)}
+.app-nav span.on{background:var(--accent)}
+/* ===== Hero ===== */
+.hero{background:radial-gradient(ellipse at 50% 0%,#16161d,#000 70%);color:var(--text-light);
+  text-align:center;padding:140px 0 0;overflow:hidden}
+.hero h1{margin-bottom:18px}
+.hero .lead{max-width:640px;margin:0 auto 14px}
+.hero-sub{color:#86868b;font-size:17px;margin-bottom:32px}
+.hero-cta{display:flex;gap:18px;justify-content:center;align-items:center;margin-bottom:60px;flex-wrap:wrap}
+.hero-device{display:flex;justify-content:center;padding-bottom:0;transform:translateY(40px)}
 </style>
 </head>
 <body>
@@ -95,7 +140,43 @@ body{padding-top:52px}
     </nav>
   </div>
 </header>
-<!-- HERO -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <p class="eyebrow">星枢令 · ArcaneKey</p>
+    <h1>你的密钥<br>只属于这台设备</h1>
+    <p class="lead">跨平台 TOTP 身份验证器。验证码每 30 秒自动刷新，密钥仅存于本地，从不上传服务器。</p>
+    <p class="hero-sub">HarmonyOS App · 微信小程序</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="https://github.com/mengyuefeitian/ArcaneKey" target="_blank" rel="noopener">在 GitHub 获取</a>
+      <a class="btn btn-ghost" href="#features">了解更多 ›</a>
+    </div>
+    <div class="hero-device">
+      <div class="device">
+        <div class="device-screen">
+          <div class="island"></div>
+          <div class="app-title">星枢令</div>
+          <div class="tk">
+            <div class="tk-avatar" style="background:#24292f">G</div>
+            <div class="tk-info"><div class="tk-name">GitHub</div><div class="tk-acct">dev@arcanekey</div><div class="tk-code">428 913</div></div>
+            <div class="ring" style="--p:78%"></div>
+          </div>
+          <div class="tk">
+            <div class="tk-avatar" style="background:#4080D0">G</div>
+            <div class="tk-info"><div class="tk-name">Google</div><div class="tk-acct">me@gmail.com</div><div class="tk-code">051 264</div></div>
+            <div class="ring" style="--p:55%"></div>
+          </div>
+          <div class="tk">
+            <div class="tk-avatar" style="background:#1677FF">支</div>
+            <div class="tk-info"><div class="tk-name">支付宝</div><div class="tk-acct">138****8888</div><div class="tk-code">739 016</div></div>
+            <div class="ring" style="--p:33%"></div>
+          </div>
+          <div class="app-nav"><span class="on"></span><span></span><span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- FEATURES -->
 
 <script>
 /* 交互脚本将在最后任务加入 */
