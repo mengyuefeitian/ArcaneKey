@@ -549,15 +549,15 @@ struct Index {
     if (type === 'home') {
       SymbolGlyph($r('sys.symbol.house'))
         .fontColor([this.currentTab === 0 ? this.accentColor : '#d0d0dd'])
-        .fontSize(24)
+        .fontSize(18)
     } else if (type === 'scan') {
       SymbolGlyph($r('sys.symbol.qrcode'))
         .fontColor([this.currentTab === 1 ? this.accentColor : '#d0d0dd'])
-        .fontSize(24)
+        .fontSize(18)
     } else if (type === 'profile') {
       SymbolGlyph($r('sys.symbol.person'))
         .fontColor([this.currentTab === 2 ? this.accentColor : '#d0d0dd'])
-        .fontSize(24)
+        .fontSize(18)
     }
   }
 
@@ -566,10 +566,10 @@ struct Index {
   bottomNav() {
     Row() {
       // 首页
-      Column({ space: 3 }) {
+      Column({ space: 2 }) {
         this.tabIcon('home', 0)
         Text('首页')
-          .fontSize(11)
+          .fontSize(9)
           .fontWeight(this.currentTab === 0 ? 600 : 500)
           .fontColor(this.currentTab === 0 ? this.accentColor : '#d0d0dd')
       }
@@ -585,12 +585,12 @@ struct Index {
       })
 
       // 搜索 (紧跟首页)
-      Column({ space: 3 }) {
+      Column({ space: 2 }) {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
           .fontColor([this.searching ? this.accentColor : '#d0d0dd'])
-          .fontSize(24)
+          .fontSize(18)
         Text('搜索')
-          .fontSize(10)
+          .fontSize(9)
           .fontWeight(this.searching ? 600 : 500)
           .fontColor(this.searching ? this.accentColor : '#d0d0dd')
       }
@@ -607,10 +607,10 @@ struct Index {
       })
 
       // 扫码
-      Column({ space: 3 }) {
+      Column({ space: 2 }) {
         this.tabIcon('scan', 1)
         Text('扫码')
-          .fontSize(10)
+          .fontSize(9)
           .fontWeight(this.currentTab === 1 ? 600 : 500)
           .fontColor(this.currentTab === 1 ? this.accentColor : '#d0d0dd')
       }
@@ -628,10 +628,10 @@ struct Index {
       })
 
       // 我的
-      Column({ space: 3 }) {
+      Column({ space: 2 }) {
         this.tabIcon('profile', 2)
         Text('我的')
-          .fontSize(11)
+          .fontSize(9)
           .fontWeight(this.currentTab === 2 ? 600 : 500)
           .fontColor(this.currentTab === 2 ? this.accentColor : '#d0d0dd')
       }
@@ -642,16 +642,19 @@ struct Index {
       .justifyContent(FlexAlign.Center)
       .onClick(() => { this.currentTab = 2; this.navVisible = true; })
     }
-    .width('90%')
-    .height(60)
-    .position({ x: '5%', y: '100%' })
-    .translate({ x: 0, y: this.navVisible ? -(60 + this.navSafeBottom + 16) : 0 })
-    .animation({ duration: 300, curve: Curve.EaseInOut })
-    .backgroundColor('rgba(30,30,40,0.45)')
-    .backdropBlur(20)
-    .borderRadius(30)
-    .shadow({ radius: 10, color: 'rgba(0,0,0,0.3)', offsetX: 0, offsetY: 4 })
+    .width(222)
+    .height(46)
+    .position({ x: '50%', y: '100%' })
+    .translate({ x: '-50%', y: this.navVisible ? -(46 + this.navSafeBottom + 24) : 56 })
+    .opacity(this.navVisible ? 1 : 0)
+    .scale({ x: this.navVisible ? 1 : 0.78, y: this.navVisible ? 1 : 0.78 })
+    .animation({ duration: 220, curve: Curve.Friction })
+    .backgroundColor('rgba(30,30,40,0.62)')
+    .backdropBlur(18)
+    .borderRadius(23)
+    .shadow({ radius: 12, color: 'rgba(0,0,0,0.35)', offsetX: 0, offsetY: 4 })
     .justifyContent(FlexAlign.SpaceAround)
+    .padding({ bottom: 5 })
   }
 
   // ── Builder: Toast ──────────────────────────────────────────────
