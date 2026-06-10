@@ -74,10 +74,9 @@ export struct HomeView {
               .onClick(() => { this.searchQ = ''; })
           }
         }
-        .width('100%')
         .height(36)
         .padding({ left: 16, right: 16, top: 6, bottom: 6 })
-        .margin({ top: 8, bottom: 8 })
+        .margin({ left: 16, right: 16, top: 8, bottom: 8 })
         .backgroundColor('#191920')
         .borderRadius(10)
         .border({ width: 1, color: this.accentColor + '55' })
