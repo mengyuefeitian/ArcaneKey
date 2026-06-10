@@ -8,7 +8,7 @@ import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -155,6 +155,16 @@ struct Index {
       return;
     }
     try {
+      // Load login state
+      const loginData: LoginData = await loadLogin();
+      if (loginData.loggedIn) {
+        this.loggedIn = true;
+        this.userName = loginData.userName;
+        this.userPhone = loginData.userPhone;
+        this.userAvatar = loginData.userAvatar;
+        this.harmonyLogin = loginData.harmonyLogin;
+      }
+
       const saved = await loadTokens();
       this.tokens = (saved && saved.length > 0) ? saved : INITIAL_TOKENS.slice();
       const theme = await loadTheme();
@@ -200,12 +210,23 @@ struct Index {
   }
 
   private addToken(brand: string, account: string, secret: string): void {
+    // Duplicate check
+    const normalizedSecret = secret.trim().toUpperCase();
+    const existing = this.tokens.find(t =>
+      t.secret.toUpperCase() === normalizedSecret
+    );
+    if (existing) {
+      this.toast(`已存在相同密钥的账号：${existing.brand}`);
+      return;
+    }
+
+    // Free user limit check
     if (!this.isMember && this.tokens.length >= FREE_TOKEN_LIMIT) {
       this.toast(`免费用户最多添加${FREE_TOKEN_LIMIT}个口令`);
       this.currentTab = 2;
       return;
     }
-    const tok: Token = { id: Date.now().toString(), brand: brand, account: account, secret: secret.toUpperCase() };
+    const tok: Token = { id: Date.now().toString(), brand: brand, account: account, secret: normalizedSecret };
     this.tokens = this.tokens.concat([tok]);
     saveTokens(this.tokens);
     this.refreshOtp();
@@ -283,7 +304,11 @@ struct Index {
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-      this.toast(`[OK] nick=${cred?.nickName ?? 'null'}`);
+
+      // Save login state to preferences
+      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true);
+
+      this.toast(`登录成功`);
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
@@ -295,7 +320,11 @@ struct Index {
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-        this.toast(`[ERR] code=${code}`);
+
+        // Save login state to preferences
+        await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true);
+
+        this.toast(`登录成功`);
       }
     }
   }
@@ -1251,6 +1280,7 @@ struct Index {
             this.userName = '';
             this.userPhone = '';
             this.userAvatar = '';
+            saveLogin(false, '', '', '', false); // Clear login state
             this.toast('已退出登录');
           })
       }
@@ -1325,7 +1355,14 @@ struct Index {
               this.loginTab = 1;
               this.showLogin = true;
             },
-            onLogout: () => { this.loggedIn = false; this.userName = ''; this.userPhone = ''; this.userAvatar = ''; this.toast('已退出登录'); },
+            onLogout: () => {
+              this.loggedIn = false;
+              this.userName = '';
+              this.userPhone = '';
+              this.userAvatar = '';
+              saveLogin(false, '', '', '', false); // Clear login state
+              this.toast('已退出登录');
+            },
             onBackupTap: () => {
               if (!this.isMember) { this.toast('备份功能需要开通会员'); this.showMembership = true; return; }
               this.backupPw = ''; this.backupPw2 = ''; this.showBackup = true;

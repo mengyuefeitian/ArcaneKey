@@ -78,6 +78,7 @@ export struct FeedbackView {
       }.scrollBar(BarState.Off).flexGrow(1)
     }
     .width('100%').height('100%').backgroundColor('#0d0d12')
+    .padding({ top: 44 }) // Add status bar safe area padding
   }
 
   private async submitFeedback(): Promise<void> {
