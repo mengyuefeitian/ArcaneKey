@@ -124,6 +124,8 @@ For every task:
 
 **Never stop after code generation.**
 
+**CRITICAL: ALL HarmonyOS development MUST compile successfully before completion. If build fails, the task is NOT complete. DO NOT push code without successful build.**
+
 ### Build Commands
 
 ```bash
