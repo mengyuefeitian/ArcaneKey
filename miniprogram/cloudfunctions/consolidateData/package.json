@@ -1,0 +1,9 @@
+{
+  "name": "consolidateData",
+  "version": "1.0.0",
+  "description": "合并云端分散的用户数据记录",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
