@@ -4,6 +4,7 @@ import { Token, ThemeItem } from '../model/Token';
 const TOKENS_KEY = 'auth_tokens';
 const THEME_KEY = 'auth_theme';
 const MEMBER_KEY = 'ak_membership';
+const LOGIN_KEY = 'ak_login';
 const PREF_NAME = 'arcankey_prefs';
 
 let pref: preferences.Preferences | null = null;
@@ -81,6 +82,33 @@ export async function saveMember(isMember: boolean, boundAccount: string): Promi
   try {
     if (!pref) return;
     await pref.put(MEMBER_KEY, JSON.stringify({ isMember, boundAccount }));
+    await pref.flush();
+  } catch (_) {}
+}
+
+export interface LoginData {
+  loggedIn: boolean;
+  userName: string;
+  userPhone: string;
+  userAvatar: string;
+  harmonyLogin: boolean;
+}
+
+export async function loadLogin(): Promise<LoginData> {
+  try {
+    if (!pref) return { loggedIn: false, userName: '', userPhone: '', userAvatar: '', harmonyLogin: false };
+    const val = await pref.get(LOGIN_KEY, '');
+    if (val && typeof val === 'string' && val !== '') {
+      return JSON.parse(val as string) as LoginData;
+    }
+  } catch (_) {}
+  return { loggedIn: false, userName: '', userPhone: '', userAvatar: '', harmonyLogin: false };
+}
+
+export async function saveLogin(loggedIn: boolean, userName: string, userPhone: string, userAvatar: string, harmonyLogin: boolean): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(LOGIN_KEY, JSON.stringify({ loggedIn, userName, userPhone, userAvatar, harmonyLogin }));
     await pref.flush();
   } catch (_) {}
 }

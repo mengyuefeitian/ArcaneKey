@@ -1,0 +1,8 @@
+{"type":"server-started","port":62111,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:62111","screen_dir":"/Users/xiaoan/Documents/code/ArcaneKey/.superpowers/brainstorm/55714-1779719160/content","state_dir":"/Users/xiaoan/Documents/code/ArcaneKey/.superpowers/brainstorm/55714-1779719160/state"}
+{"type":"screen-added","file":"/Users/xiaoan/Documents/code/ArcaneKey/.superpowers/brainstorm/55714-1779719160/content/waiting.html"}
+{"type":"screen-added","file":"/Users/xiaoan/Documents/code/ArcaneKey/.superpowers/brainstorm/55714-1779719160/content/membership-modal.html"}
+{"source":"user-event","type":"click","text":"×\n          开通会员\n        \n        \n        \n          👑\n          \n            ¥19.90\n            /年\n          \n        \n        \n        \n          ✓无限制添加动态口令\n          ✓加密备份数据导入导出\n          ✓查看 Secret Key\n          ✓云端数据每小时自动同步\n        \n        \n        \n          立即开通会员\n        \n        \n          已购买过？恢复购买\n        \n      \n    \n    \n      C — 主题色按钮 + 恢复购买链接\n      主购买按钮 + 底部\"恢复购买\"文字链接，方便换机/重装用户手动触发恢复。推荐。","choice":"c","id":null,"timestamp":1779720309377}
+{"type":"screen-added","file":"/Users/xiaoan/Documents/code/ArcaneKey/.superpowers/brainstorm/55714-1779719160/content/membership-states.html"}
+{"type":"screen-added","file":"/Users/xiaoan/Documents/code/ArcaneKey/.superpowers/brainstorm/55714-1779719160/content/membership-states-v2.html"}
+{"type":"screen-added","file":"/Users/xiaoan/Documents/code/ArcaneKey/.superpowers/brainstorm/55714-1779719160/content/waiting-2.html"}
+{"type":"server-stopped","reason":"idle timeout"}

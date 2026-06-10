@@ -1,0 +1,116 @@
+<h2>会员弹窗 UI 设计</h2>
+<p class="subtitle">选择你偏好的支付按钮样式</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0d0d12;border-radius:16px;padding:20px;font-family:sans-serif;max-width:300px;margin:0 auto">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;margin-bottom:16px">
+          <span style="color:rgba(238,238,245,0.6);font-size:20px;cursor:pointer">×</span>
+          <span style="color:#eeeef5;font-size:17px;font-weight:650;margin-left:12px">开通会员</span>
+        </div>
+        <!-- Price area -->
+        <div style="text-align:center;padding:24px 0 20px">
+          <div style="font-size:48px">👑</div>
+          <div style="display:flex;align-items:baseline;justify-content:center;gap:4px;margin-top:8px">
+            <span style="color:#eeeef5;font-size:36px;font-weight:800">¥19.90</span>
+            <span style="color:rgba(238,238,245,0.4);font-size:14px">/年</span>
+          </div>
+        </div>
+        <!-- Benefits -->
+        <div style="background:#191920;border-radius:16px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">无限制添加动态口令</span></div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">加密备份数据导入导出</span></div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">查看 Secret Key</span></div>
+          <div style="display:flex;gap:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">云端数据每小时自动同步</span></div>
+        </div>
+        <!-- Option A: Single Huawei Pay button -->
+        <button style="width:100%;height:50px;border-radius:15px;background:#cc0000;border:none;color:#fff;font-size:15px;font-weight:650;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer">
+          <span style="font-size:18px">🔴</span> 华为支付 ¥19.90
+        </button>
+        <div style="text-align:center;margin-top:10px;color:rgba(238,238,245,0.3);font-size:11px">通过华为钱包安全支付</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — 单一华为支付按钮</h3>
+      <p>简洁直接，符合 AppGallery 规范。一个显眼的红色华为支付按钮。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0d0d12;border-radius:16px;padding:20px;font-family:sans-serif;max-width:300px;margin:0 auto">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;margin-bottom:16px">
+          <span style="color:rgba(238,238,245,0.6);font-size:20px;cursor:pointer">×</span>
+          <span style="color:#eeeef5;font-size:17px;font-weight:650;margin-left:12px">开通会员</span>
+        </div>
+        <!-- Price area -->
+        <div style="text-align:center;padding:24px 0 20px">
+          <div style="font-size:48px">👑</div>
+          <div style="display:flex;align-items:baseline;justify-content:center;gap:4px;margin-top:8px">
+            <span style="color:#eeeef5;font-size:36px;font-weight:800">¥19.90</span>
+            <span style="color:rgba(238,238,245,0.4);font-size:14px">/年</span>
+          </div>
+        </div>
+        <!-- Benefits -->
+        <div style="background:#191920;border-radius:16px;padding:16px;margin-bottom:20px">
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">无限制添加动态口令</span></div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">加密备份数据导入导出</span></div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">查看 Secret Key</span></div>
+          <div style="display:flex;gap:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">云端数据每小时自动同步</span></div>
+        </div>
+        <!-- Option B: Accent-colored button matching app theme -->
+        <button style="width:100%;height:50px;border-radius:15px;background:#7c5cbf;border:none;color:#fff;font-size:15px;font-weight:650;cursor:pointer">
+          立即开通会员
+        </button>
+        <div style="text-align:center;margin-top:10px;color:rgba(238,238,245,0.3);font-size:11px">💳 华为钱包支付 · 安全加密</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 主题色按钮 + 小字说明</h3>
+      <p>按钮颜色跟随 App 主题色，按钮下方小字注明华为钱包支付。视觉更统一。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0d0d12;border-radius:16px;padding:20px;font-family:sans-serif;max-width:300px;margin:0 auto">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;margin-bottom:16px">
+          <span style="color:rgba(238,238,245,0.6);font-size:20px;cursor:pointer">×</span>
+          <span style="color:#eeeef5;font-size:17px;font-weight:650;margin-left:12px">开通会员</span>
+        </div>
+        <!-- Price area -->
+        <div style="text-align:center;padding:24px 0 20px">
+          <div style="font-size:48px">👑</div>
+          <div style="display:flex;align-items:baseline;justify-content:center;gap:4px;margin-top:8px">
+            <span style="color:#eeeef5;font-size:36px;font-weight:800">¥19.90</span>
+            <span style="color:rgba(238,238,245,0.4);font-size:14px">/年</span>
+          </div>
+        </div>
+        <!-- Benefits -->
+        <div style="background:#191920;border-radius:16px;padding:16px;margin-bottom:16px">
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">无限制添加动态口令</span></div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">加密备份数据导入导出</span></div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">查看 Secret Key</span></div>
+          <div style="display:flex;gap:10px"><span style="color:#7c5cbf">✓</span><span style="color:rgba(238,238,245,0.7);font-size:14px">云端数据每小时自动同步</span></div>
+        </div>
+        <!-- Option C: Main purchase + restore link -->
+        <button style="width:100%;height:50px;border-radius:15px;background:#7c5cbf;border:none;color:#fff;font-size:15px;font-weight:650;cursor:pointer;margin-bottom:10px">
+          立即开通会员
+        </button>
+        <div style="text-align:center;color:rgba(238,238,245,0.35);font-size:12px">
+          已购买过？<span style="color:#7c5cbf;text-decoration:underline;cursor:pointer">恢复购买</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — 主题色按钮 + 恢复购买链接</h3>
+      <p>主购买按钮 + 底部"恢复购买"文字链接，方便换机/重装用户手动触发恢复。推荐。</p>
+    </div>
+  </div>
+
+</div>
