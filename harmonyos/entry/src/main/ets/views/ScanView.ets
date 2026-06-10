@@ -20,6 +20,17 @@ export struct ScanView {
   @State scanErrMsg: string = '';
 
   aboutToAppear(): void {
+    // Reset all state variables
+    this.brand = '';
+    this.account = '';
+    this.secret = '';
+    this.brandErr = '';
+    this.secretErr = '';
+    this.scanned = false;
+    this.tab = 0;
+    this.scanErrMsg = '';
+    this.scanning = false;
+
     // Auto-launch camera when scan view opens
     setTimeout(() => { this.doScan(false); }, 200);
   }
@@ -49,8 +60,16 @@ export struct ScanView {
       const dec = decodeURIComponent(label);
       const b = params['issuer'] || (dec.includes(':') ? dec.split(':')[0] : dec);
       const a = dec.includes(':') ? dec.split(':')[1] : dec;
-      this.brand = b; this.account = a; this.secret = params['secret'] ?? '';
-      this.scanned = true; this.tab = 2;
+      const s = params['secret'] ?? '';
+
+      // Directly add token without user confirmation
+      if (s.trim()) {
+        this.onAdd(b.trim(), a.trim(), s.trim().toUpperCase());
+        this.onClose(); // Close scan view after adding
+      } else {
+        this.scanErrMsg = '无法识别二维码内容';
+        setTimeout(() => { this.scanErrMsg = ''; }, 2200);
+      }
     } catch (e) {
       this.scanErrMsg = '无法识别二维码内容';
       setTimeout(() => { this.scanErrMsg = ''; }, 2200);
@@ -112,10 +131,6 @@ export struct ScanView {
         .onClick(() => this.onClose())
 
         Text('添加账号').fontSize(17).fontWeight(650).fontColor('#eeeef5')
-        if (this.scanned) {
-          Blank()
-          Text('✓ 已识别').fontSize(12).fontColor(this.accentColor).fontWeight(600)
-        }
       }
       .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 0 })
 
@@ -229,14 +244,6 @@ export struct ScanView {
         // Manual
         Scroll() {
           Column({ space: 14 }) {
-            if (this.scanned) {
-              Text('✓ 已从二维码读取信息，请确认或修改')
-                .fontSize(13).fontColor(this.accentColor).fontWeight(500)
-                .padding(12).borderRadius(12)
-                .backgroundColor(this.accentColor + '18')
-                .border({ width: 1, color: this.accentColor + '30' })
-                .width('100%')
-            }
             Column({ space: 6 }) {
               Row({ space: 4 }) {
                 Text('品牌名称').fontSize(12).fontColor('rgba(238,238,245,0.45)').fontWeight(500)

@@ -66,6 +66,164 @@ ArkTS (HarmonyOS 6.1, API 23) app built with DevEco Studio. Bundle name: `com.ex
 
 **Bottom nav**: floating capsule (90% width, 28px border radius) with `.backdropFilter('blur(20px)')` glassmorphism, positioned via `translate({ y: navVisible ? -20 : 80 })`. Content has `.padding({ bottom: 80 })` to avoid overlap. Nav icons are clean SVG paths (not system symbols). `HomeView`'s `onScrollFrameBegin` callback drives `navVisible` to hide/show on scroll direction.
 
+## CRITICAL: HarmonyOS Development Rules
+
+**This project targets HarmonyOS 6.1 (API 23). ArkTS has near-100% compilation failure when TypeScript patterns are used.**
+
+### Before Writing Any `.ets` File
+
+1. **Read an existing `.ets` file first** — use `harmonyos/entry/src/main/ets/pages/Index.ets` as reference
+2. **Never use anonymous type literals on `@State`** — define a named `interface` or `class`
+3. **Every `@State` field must have an initializer** — `@State count: number = 0`
+4. **Import paths must be exact** — copy from existing working files, not from memory
+5. **No TypeScript-only constructs** — no `interface` extends in struct fields, check ArkTS restrictions
+
+### Validation Checklist Before Any `.ets` Change
+
+- [ ] All `@State`/`@Link`/`@Prop` fields have type annotations AND initializers
+- [ ] All imported types/functions exist in the exact import path used
+- [ ] No anonymous object literal types on decorator fields
+- [ ] `struct` `build()` method uses only ArkUI builder syntax
+- [ ] API Level 23 compatibility verified
+
+### API Verification Rules
+
+Before using any HarmonyOS API:
+
+1. **Priority 1: Check local SDK declaration files**
+   - SDK path: `/Applications/DevEco-Studio.app/Contents/sdk/default`
+   - Verify in `openharmony/ets/api/`, `openharmony/ets/component/`, `hms/ets/api/`
+   - Use `.d.ts` and `.d.ets` files as source of truth
+
+2. **Priority 2: Check Huawei official documentation**
+   - https://developer.huawei.com/consumer/cn/doc/harmonyos-references/
+   - https://developer.huawei.com/consumer/cn/doc/harmonyos-references/arkui-ts/
+
+3. **Priority 3: Use site search**
+   - `site:developer.huawei.com API_NAME API 23`
+
+**If API cannot be verified:**
+- Do NOT write production code
+- Use `// TODO: API 23 compatibility requires manual verification`
+- Report the uncertainty
+
+### Build Verification Workflow
+
+For every task:
+
+1. Analyze project structure
+2. Read existing implementation
+3. Identify SDK version (API 23)
+4. Create implementation plan
+5. Modify code
+6. Run build
+7. Fix errors
+8. Rebuild
+9. Verify result
+10. Report completion
+
+**Never stop after code generation.**
+
+### Build Commands
+
+```bash
+# Build from terminal (run from harmonyos/ directory)
+cd harmonyos && DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+  /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+  --mode project -p product=default assembleApp --analyze=normal --parallel --incremental --daemon
+```
+
+**Important:** `DEVECO_SDK_HOME` must point to `/Applications/DevEco-Studio.app/Contents/sdk` (build environment root), NOT `sdk/default` or other paths.
+
+### Error Resolution Loop
+
+When build fails:
+1. Read ALL errors
+2. Identify root cause
+3. Fix issue
+4. Rebuild
+5. Repeat until build succeeds
+
+### HarmonyOS Build Checklist
+
+Verify:
+- [ ] Import paths exact
+- [ ] ArkTS decorators correct (`@State`, `@Component`, `@Builder`, `@Entry`)
+- [ ] Resource references exist (`$string`, `$media`, `$color`)
+- [ ] Permission declarations in `module.json5`
+- [ ] Component property signatures match ArkUI spec
+- [ ] Lifecycle method signatures correct
+- [ ] API Level 23 compatibility confirmed
+
+### Completion Criteria
+
+Task is complete ONLY if:
+- Build succeeds
+- No ArkTS errors
+- No compilation errors
+- No import errors
+- No resource errors
+- No syntax errors
+
+**If build fails: Task is NOT complete.**
+
+### Forbidden Patterns
+
+Never use:
+- API 24+ only interfaces
+- Deprecated APIs
+- Android APIs
+- iOS APIs
+- Node.js APIs
+- Browser/Web APIs
+- React-specific APIs
+- Vue-specific APIs
+
+### ArkTS Strict Mode
+
+Requirements:
+- No `any` type
+- No implicit type conversion
+- Explicit typing required
+- Prefer `interface` or `class` definitions
+- No untyped object literals
+
+Examples forbidden:
+```typescript
+let obj = {}  // ❌ Missing type
+@State data: { name: string }  // ❌ Anonymous type literal on decorator
+```
+
+Must use:
+```typescript
+interface DataModel { name: string }
+let obj: DataModel = { name: '' }  // ✅
+@State data: DataModel = { name: '' }  // ✅
+```
+
+### Existing Code Preference
+
+Always prefer:
+1. Existing implementation patterns
+2. Existing architecture
+3. Existing utility classes (StorageUtil, CryptoUtil, TOTP)
+4. Existing UI components (Logo, CountdownRing, TokenCard)
+
+Avoid introducing new patterns. Maintain project consistency.
+
+### Delivery Format
+
+When reporting completion always include:
+- **Files Modified**: List modified files
+- **Changes Made**: Summarize implementation
+- **Build Status**: PASS / FAIL
+- **API Verification**: Verified APIs used
+- **API Level Compatibility**: Confirm API 23 compatibility
+- **Remaining Issues**: List unresolved items
+
+---
+
 ## Key details
 
 - **UI language**: Chinese. All theme names, button labels, and UI text are in Chinese (e.g. 海洋蓝, 皇室紫, 扫一扫). Keep new UI strings in Chinese.
