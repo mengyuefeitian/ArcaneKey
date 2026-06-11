@@ -7,6 +7,7 @@ export struct HomeView {
   @Prop otpMap: Record<string, OtpPair> = {};
   @Prop timeLeft: number = 30;
   @Prop accentColor: string = '#4080D0';
+  @Prop isDark: boolean = true;
   @Link searching: boolean;
   @Link searchQ: string;
   onEdit: (tok: Token) => void = () => {};

@@ -3,6 +3,7 @@ import { common, Want } from '@kit.AbilityKit';
 @Component
 export struct FeedbackView {
   @Prop accentColor: string = '#4080D0';
+  @Prop isDark: boolean = true;
   @State type: string = '需求';
   @State content: string = '';
   @State contact: string = '';
