@@ -1,0 +1,6 @@
+{
+  "layered-image": {
+    "background": "./background.png",
+    "foreground": "./foreground.png"
+  }
+}
