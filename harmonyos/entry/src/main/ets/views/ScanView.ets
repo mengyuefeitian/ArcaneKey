@@ -222,7 +222,7 @@ export struct ScanView {
           Button(this.scanning ? '识别中…' : '扫描二维码')
             .width('100%').height(50).borderRadius(15)
             .backgroundColor(this.scanning ? 'rgba(255,255,255,0.07)' : this.accentColor)
-            .fontColor(this.scanning ? 'rgba(238,238,245,0.4)' : '#fff')
+            .fontColor(this.scanning ? this.c('rgba(238,238,245,0.4)', '#A99E93') : '#fff')
             .fontSize(15).fontWeight(650)
             .enabled(!this.scanning)
             .onClick(() => this.doScan(false))
