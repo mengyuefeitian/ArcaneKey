@@ -115,6 +115,8 @@ struct Index {
   private cdTimer: number = -1;
   private autoSyncTimer: number = -1;
 
+  private c(dark: string, light: string): string { return this.isDark ? dark : light; }
+
   // ── Lifecycle ───────────────────────────────────────────────────
   aboutToAppear(): void {
     this.loadData();
@@ -683,11 +685,11 @@ struct Index {
   modalHeader(title: string, onClose: () => void) {
     Row({ space: 12 }) {
       Button({ type: ButtonType.Normal }) {
-        Text('×').fontSize(20).fontColor('rgba(238,238,245,0.75)')
+        Text('×').fontSize(20).fontColor(this.c('rgba(238,238,245,0.75)', '#5C4F43'))
       }
-      .backgroundColor('rgba(255,255,255,0.08)').borderRadius(11).width(36).height(36)
+      .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.06)')).borderRadius(11).width(36).height(36)
       .onClick(onClose)
-      Text(title).fontSize(17).fontWeight(650).fontColor('#eeeef5')
+      Text(title).fontSize(17).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
     }
     .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 0 })
   }
@@ -858,7 +860,7 @@ struct Index {
           .padding({ left: 20, right: 20, top: 12, bottom: 32 })
         }.scrollBar(BarState.Off).layoutWeight(1)
       }
-      .width('100%').height('100%').backgroundColor('#0d0d12')
+      .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
       .padding({ top: 44 })
     }
     .width('100%').height('100%').zIndex(350)
@@ -882,7 +884,7 @@ struct Index {
         .width(72).height(72)
 
         Text('使用鸿蒙账号快速登录')
-          .fontSize(14).fontColor('rgba(238,238,245,0.55)').textAlign(TextAlign.Center)
+          .fontSize(14).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43')).textAlign(TextAlign.Center)
 
         // Privacy agreement
         Row({ space: 8 }) {
@@ -893,12 +895,12 @@ struct Index {
           }
           .width(18).height(18).borderRadius(4)
           .backgroundColor(this.privacyAgreed ? this.accentColor : Color.Transparent)
-          .border({ width: 1.5, color: this.privacyAgreed ? this.accentColor : 'rgba(238,238,245,0.3)' })
+          .border({ width: 1.5, color: this.privacyAgreed ? this.accentColor : this.c('rgba(238,238,245,0.3)', '#D5CEC4') })
           .onClick(() => { this.privacyAgreed = !this.privacyAgreed; })
 
           Text() {
             Span('我已阅读并同意 ')
-              .fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
             Span('《隐私保护协议》')
               .fontSize(12).fontColor(this.accentColor).fontWeight(500)
               .onClick(() => {
@@ -914,7 +916,7 @@ struct Index {
                 });
               })
             Span('，授权获取头像、昵称信息')
-              .fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
           }
           .flexGrow(1)
         }
@@ -923,19 +925,19 @@ struct Index {
 
         Button('鸿蒙账号登录')
           .width('100%').height(50).borderRadius(15)
-          .backgroundColor(this.privacyAgreed ? this.accentColor : '#191920')
-          .fontColor(this.privacyAgreed ? '#fff' : 'rgba(238,238,245,0.3)')
+          .backgroundColor(this.privacyAgreed ? this.accentColor : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.privacyAgreed ? '#fff' : this.c('rgba(238,238,245,0.3)', '#A99E93'))
           .fontSize(15).fontWeight(650)
           .onClick(() => { this.doHarmonyLogin(); })
         Text('将使用设备上的鸿蒙账号信息')
-          .fontSize(11).fontColor('rgba(238,238,245,0.3)').textAlign(TextAlign.Center)
+          .fontSize(11).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93')).textAlign(TextAlign.Center)
       }
       .padding({ left: 20, right: 20, top: 20 })
       .flexGrow(1)
       .width('100%')
       .alignItems(HorizontalAlign.Center)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -952,22 +954,22 @@ struct Index {
           .borderRadius(12).border({ width: 1, color: 'rgba(59,130,246,0.2)' })
 
         Column({ space: 6 }) {
-          Text('加密密码').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+          Text('加密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
           TextInput({ text: this.backupPw, placeholder: '设置备份密码' })
             .type(InputType.Password)
             .onChange((v) => { this.backupPw = v; })
-            .backgroundColor('#191920').fontColor('#eeeef5')
-            .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+            .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Column({ space: 6 }) {
-          Text('确认密码').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+          Text('确认密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
           TextInput({ text: this.backupPw2, placeholder: '再次输入密码' })
             .type(InputType.Password)
             .onChange((v) => { this.backupPw2 = v; })
-            .backgroundColor('#191920').fontColor('#eeeef5')
-            .border({ width: 1, color: this.backupPw && this.backupPw2 && this.backupPw !== this.backupPw2 ? '#f87171' : 'rgba(255,255,255,0.08)' })
+            .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .border({ width: 1, color: this.backupPw && this.backupPw2 && this.backupPw !== this.backupPw2 ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
             .borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
@@ -976,19 +978,19 @@ struct Index {
           Text('两次密码不一致').fontSize(12).fontColor('#f87171')
         }
         Text(`将备份 ${this.tokens.length} 个账号`)
-          .fontSize(13).fontColor('rgba(238,238,245,0.35)')
+          .fontSize(13).fontColor(this.c('rgba(238,238,245,0.35)', '#8B7E74'))
 
         Button('加密备份并下载')
           .width('100%').height(50).borderRadius(15)
-          .backgroundColor(this.backupPw && this.backupPw === this.backupPw2 ? this.accentColor : '#191920')
-          .fontColor(this.backupPw && this.backupPw === this.backupPw2 ? '#fff' : 'rgba(238,238,245,0.3)')
+          .backgroundColor(this.backupPw && this.backupPw === this.backupPw2 ? this.accentColor : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.backupPw && this.backupPw === this.backupPw2 ? '#fff' : this.c('rgba(238,238,245,0.3)', '#A99E93'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doBackup())
       }
       .padding({ left: 20, right: 20, top: 16 })
       .flexGrow(1)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -1001,41 +1003,41 @@ struct Index {
       Column({ space: 14 }) {
         Button(this.importFileName ? `已选择: ${this.importFileName}` : '选择备份文件')
           .width('100%').height(44).borderRadius(12)
-          .backgroundColor(this.importFileName ? this.accentColor + '22' : '#191920')
-          .fontColor(this.importFileName ? this.accentColor : 'rgba(238,238,245,0.4)')
+          .backgroundColor(this.importFileName ? this.accentColor + '22' : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.importFileName ? this.accentColor : this.c('rgba(238,238,245,0.4)', '#8B7E74'))
           .fontSize(13).fontWeight(500)
           .onClick(() => this.selectImportFile())
 
         Column({ space: 6 }) {
-          Text('备份内容（粘贴加密文本）').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+          Text('备份内容（粘贴加密文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
           TextArea({ text: this.importText, placeholder: '粘贴备份内容…' })
             .onChange((v) => { this.importText = v; })
-            .height(120).backgroundColor('#191920').fontColor('#eeeef5')
-            .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
-            .placeholderColor('rgba(238,238,245,0.25)').fontSize(12).fontFamily('monospace')
+            .height(120).backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
+            .placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93')).fontSize(12).fontFamily('monospace')
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Column({ space: 6 }) {
-          Text('解密密码').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+          Text('解密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
           TextInput({ text: this.importPw, placeholder: '输入备份时设置的密码' })
             .type(InputType.Password)
             .onChange((v) => { this.importPw = v; })
-            .backgroundColor('#191920').fontColor('#eeeef5')
-            .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+            .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Button('解密并导入')
           .width('100%').height(50).borderRadius(15)
-          .backgroundColor(this.importText && this.importPw ? this.accentColor : '#191920')
-          .fontColor(this.importText && this.importPw ? '#fff' : 'rgba(238,238,245,0.3)')
+          .backgroundColor(this.importText && this.importPw ? this.accentColor : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.importText && this.importPw ? '#fff' : this.c('rgba(238,238,245,0.3)', '#A99E93'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doImport())
       }
       .padding({ left: 20, right: 20, top: 16 })
       .flexGrow(1)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -1049,13 +1051,14 @@ struct Index {
         (item: string) => {
           Row({ space: 8 }) {
             Text('✓').fontSize(12).fontWeight(700).fontColor(this.accentColor)
-            Text(item).fontSize(13).fontColor('rgba(238,238,245,0.7)')
+            Text(item).fontSize(13).fontColor(this.c('rgba(238,238,245,0.7)', '#5C4F43'))
           }.width('100%')
         },
         (item: string) => item
       )
     }
-    .padding(14).backgroundColor('#191920').borderRadius(14).width('100%')
+    .padding(14).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(14).width('100%')
+    .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
   }
 
   @Builder
@@ -1076,7 +1079,7 @@ struct Index {
               .border({ width: 3, color: this.currentTheme.name === t.name ? '#fff' : Color.Transparent })
               .shadow({ radius: this.currentTheme.name === t.name ? 18 : 12, color: t.color + (this.currentTheme.name === t.name ? '' : '55'), offsetX: 0, offsetY: 4 })
               Text(t.name).fontSize(10).textAlign(TextAlign.Center).lineHeight(13)
-                .fontColor(this.currentTheme.name === t.name ? '#eeeef5' : 'rgba(238,238,245,0.45)')
+                .fontColor(this.currentTheme.name === t.name ? this.c('#eeeef5', '#2C1810') : this.c('rgba(238,238,245,0.45)', '#8B7E74'))
                 .fontWeight(this.currentTheme.name === t.name ? 600 : 400)
             }.alignItems(HorizontalAlign.Center)
             .onClick(() => this.selectTheme(idx))
@@ -1087,7 +1090,7 @@ struct Index {
       .columnsGap(14).rowsGap(14)
       .padding({ left: 16, right: 16, top: 8 })
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -1096,28 +1099,28 @@ struct Index {
   @Builder
   deleteConfirmDialog() {
     Column() {
-      Text('确认删除').fontSize(16).fontWeight(700).fontColor('#eeeef5').margin({ bottom: 8 })
+      Text('确认删除').fontSize(16).fontWeight(700).fontColor(this.c('#eeeef5', '#2C1810')).margin({ bottom: 8 })
       Text(`确定要删除「${this.deleteTarget.brand}」吗？${this.isMember ? '\n选择删除方式：' : '\n此操作不可撤销'}`)
-        .fontSize(14).fontColor('rgba(238,238,245,0.6)').textAlign(TextAlign.Center).margin({ bottom: 20 }).lineHeight(22)
+        .fontSize(14).fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).textAlign(TextAlign.Center).margin({ bottom: 20 }).lineHeight(22)
       if (this.isMember) {
         Row({ space: 10 }) {
-          Button('仅本地').flexGrow(1).backgroundColor('rgba(255,255,255,0.08)')
-            .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(12)
-            .fontColor('rgba(238,238,245,0.7)').fontSize(14)
+          Button('仅本地').flexGrow(1).backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.04)'))
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
+            .fontColor(this.c('rgba(238,238,245,0.7)', '#5C4F43')).fontSize(14)
             .onClick(() => this.deleteToken(true))
           Button('本地+云端').flexGrow(1).backgroundColor('#ef4444').borderRadius(12)
             .fontColor('#fff').fontSize(14).fontWeight(650)
             .onClick(() => this.deleteToken(false))
         }.width('100%')
         Button('取消').width('100%').margin({ top: 10 }).backgroundColor(Color.Transparent)
-          .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(12)
-          .fontColor('rgba(238,238,245,0.6)').fontSize(14)
+          .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
+          .fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).fontSize(14)
           .onClick(() => { this.showDeleteConfirm = false; this.deleteTarget = {} as Token; })
       } else {
         Row({ space: 10 }) {
           Button('取消').flexGrow(1).backgroundColor(Color.Transparent)
-            .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(12)
-            .fontColor('rgba(238,238,245,0.6)').fontSize(14)
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
+            .fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).fontSize(14)
             .onClick(() => { this.showDeleteConfirm = false; this.deleteTarget = {} as Token; })
           Button('确认删除').flexGrow(1).backgroundColor('#ef4444').borderRadius(12)
             .fontColor('#fff').fontSize(14).fontWeight(650)
@@ -1125,7 +1128,8 @@ struct Index {
         }.width('100%')
       }
     }
-    .padding(24).backgroundColor('#191920').borderRadius(20).width('85%')
+    .padding(24).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(20).width('85%')
+    .shadow({ radius: 24, color: 'rgba(0,0,0,0.15)', offsetX: 0, offsetY: 4 })
   }
 
   // ── Builder: Membership Modal ───────────────────────────────────
@@ -1141,7 +1145,7 @@ struct Index {
             Column({ space: 0 }) {
               Text('✨').fontSize(32).margin({ bottom: 8 })
               Text('您已是会员').fontSize(17).fontWeight(700).fontColor(this.accentColor)
-              Text('永久有效').fontSize(12).fontColor('rgba(238,238,245,0.5)').margin({ top: 4 })
+              Text('永久有效').fontSize(12).fontColor(this.c('rgba(238,238,245,0.5)', '#8B7E74')).margin({ top: 4 })
             }
             .width('100%').padding(20).alignItems(HorizontalAlign.Center)
             .backgroundColor(this.accentColor + '1e')
@@ -1153,17 +1157,18 @@ struct Index {
               Row({ space: 10 }) {
                 Stack() {
                   Text(this.boundAccount.length > 0 ? this.boundAccount[0].toUpperCase() : '鸿')
-                    .fontSize(14).fontColor('#fff').fontWeight(700)
+                    .fontSize(14).fontColor(this.c('#fff', '#fff')).fontWeight(700)
                 }
                 .width(32).height(32).borderRadius(16)
                 .backgroundColor(this.accentColor)
                 Column({ space: 2 }) {
-                  Text(this.boundAccount || '鸿蒙用户').fontSize(13).fontWeight(600).fontColor('#eeeef5')
-                  Text('换设备登录同账号可恢复会员').fontSize(11).fontColor('rgba(238,238,245,0.35)')
+                  Text(this.boundAccount || '鸿蒙用户').fontSize(13).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+                  Text('换设备登录同账号可恢复会员').fontSize(11).fontColor(this.c('rgba(238,238,245,0.35)', '#A99E93'))
                 }.alignItems(HorizontalAlign.Start)
               }.width('100%')
             }
-            .padding(12).backgroundColor('#191920').borderRadius(12).width('100%')
+            .padding(12).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(12).width('100%')
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
             .alignItems(HorizontalAlign.Start)
 
             this.memberBenefits()
@@ -1173,8 +1178,8 @@ struct Index {
             Column() {
               Text('👑').fontSize(40)
               Row({ space: 4 }) {
-                Text('¥19.90').fontSize(28).fontWeight(800).fontColor('#eeeef5')
-                Text('永久会员').fontSize(12).fontColor('rgba(238,238,245,0.4)')
+                Text('¥19.90').fontSize(28).fontWeight(800).fontColor(this.c('#eeeef5', '#2C1810'))
+                Text('永久会员').fontSize(12).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74'))
               }
               .alignItems(VerticalAlign.Bottom)
               .margin({ top: 6 })
@@ -1189,8 +1194,8 @@ struct Index {
             if (!this.loggedIn) {
               // ── 状态 1：未登录 ──────────────────────────────────────
               Column({ space: 4 }) {
-                Text('购买会员需要先登录').fontSize(12).fontColor('rgba(238,238,245,0.55)')
-                Text('会员将绑定至您的鸿蒙账号').fontSize(11).fontColor('rgba(238,238,245,0.35)')
+                Text('购买会员需要先登录').fontSize(12).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43'))
+                Text('会员将绑定至您的鸿蒙账号').fontSize(11).fontColor(this.c('rgba(238,238,245,0.35)', '#8B7E74'))
               }
               .width('100%').padding(10).alignItems(HorizontalAlign.Center)
               .backgroundColor(this.accentColor + '1a')
@@ -1215,8 +1220,8 @@ struct Index {
               Row({ space: 8 }) {
                 Text('👤').fontSize(16)
                 Column({ space: 2 }) {
-                  Text('购买后绑定至').fontSize(10).fontColor('rgba(238,238,245,0.5)')
-                  Text(this.userName || '鸿蒙用户').fontSize(12).fontWeight(600).fontColor('#eeeef5')
+                  Text('购买后绑定至').fontSize(10).fontColor(this.c('rgba(238,238,245,0.5)', '#8B7E74'))
+                  Text(this.userName || '鸿蒙用户').fontSize(12).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
                 }.alignItems(HorizontalAlign.Start)
               }
               .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
@@ -1232,7 +1237,7 @@ struct Index {
                   .onClick(() => { this.buyMembership(); })
 
                 Row() {
-                  Text('换机后可用同一账号 ').fontSize(11).fontColor('rgba(238,238,245,0.3)')
+                  Text('换机后可用同一账号 ').fontSize(11).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
                   Text('恢复购买')
                     .fontSize(11).fontColor(this.accentColor)
                     .onClick(() => { this.restorePurchase(); })
@@ -1247,7 +1252,7 @@ struct Index {
       }
       .scrollBar(BarState.Off).flexGrow(1)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -1266,9 +1271,9 @@ struct Index {
         .backgroundColor(this.accentColor)
         .shadow({ radius: 32, color: this.accentColor + '55', offsetX: 0, offsetY: 8 })
 
-        Text(this.userName).fontSize(20).fontColor('#eeeef5').fontWeight(700)
+        Text(this.userName).fontSize(20).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(700)
         if (this.userPhone) {
-          Text(this.userPhone).fontSize(14).fontColor('rgba(238,238,245,0.4)')
+          Text(this.userPhone).fontSize(14).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74'))
         }
         if (this.harmonyLogin) {
           Text('鸿蒙账号登录').fontSize(12).fontColor(this.accentColor).fontWeight(500)
@@ -1296,7 +1301,7 @@ struct Index {
       .alignItems(HorizontalAlign.Center)
       .flexGrow(1)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -1424,6 +1429,8 @@ struct Index {
           isDark: this.isDark,
           onClose: () => { this.showFeedback = false; }
         })
+          .position({ x: 0, y: 0 })
+          .zIndex(400)
       }
       if (this.showAbout) {
         AboutView({
@@ -1431,6 +1438,8 @@ struct Index {
           isDark: this.isDark,
           onClose: () => { this.showAbout = false; }
         })
+          .position({ x: 0, y: 0 })
+          .zIndex(400)
       }
       if (this.showDeleteConfirm) {
         Column() {
@@ -1455,6 +1464,6 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#0d0d12')
+    .backgroundColor(this.isDark ? '#0d0d12' : '#FAF7F2')
   }
 }
