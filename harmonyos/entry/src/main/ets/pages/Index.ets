@@ -554,15 +554,15 @@ struct Index {
   tabIcon(type: string, tabIndex: number) {
     if (type === 'home') {
       SymbolGlyph($r('sys.symbol.house'))
-        .fontColor([this.currentTab === 0 ? this.accentColor : '#d0d0dd'])
+        .fontColor([this.currentTab === 0 ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
         .fontSize(18)
     } else if (type === 'scan') {
       SymbolGlyph($r('sys.symbol.qrcode'))
-        .fontColor([this.currentTab === 1 ? this.accentColor : '#d0d0dd'])
+        .fontColor([this.currentTab === 1 ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
         .fontSize(18)
     } else if (type === 'profile') {
       SymbolGlyph($r('sys.symbol.person'))
-        .fontColor([this.currentTab === 2 ? this.accentColor : '#d0d0dd'])
+        .fontColor([this.currentTab === 2 ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
         .fontSize(18)
     }
   }
@@ -577,7 +577,7 @@ struct Index {
         Text('首页')
           .fontSize(9)
           .fontWeight(this.currentTab === 0 ? 600 : 500)
-          .fontColor(this.currentTab === 0 ? this.accentColor : '#d0d0dd')
+          .fontColor(this.currentTab === 0 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
       }
       .layoutWeight(1)
       .width('100%')
@@ -593,12 +593,12 @@ struct Index {
       // 搜索 (紧跟首页)
       Column({ space: 2 }) {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
-          .fontColor([this.searching ? this.accentColor : '#d0d0dd'])
+          .fontColor([this.searching ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
           .fontSize(18)
         Text('搜索')
           .fontSize(9)
           .fontWeight(this.searching ? 600 : 500)
-          .fontColor(this.searching ? this.accentColor : '#d0d0dd')
+          .fontColor(this.searching ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
       }
       .layoutWeight(1)
       .width('100%')
@@ -618,7 +618,7 @@ struct Index {
         Text('扫码')
           .fontSize(9)
           .fontWeight(this.currentTab === 1 ? 600 : 500)
-          .fontColor(this.currentTab === 1 ? this.accentColor : '#d0d0dd')
+          .fontColor(this.currentTab === 1 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
       }
       .layoutWeight(1)
       .width('100%')
@@ -639,7 +639,7 @@ struct Index {
         Text('我的')
           .fontSize(9)
           .fontWeight(this.currentTab === 2 ? 600 : 500)
-          .fontColor(this.currentTab === 2 ? this.accentColor : '#d0d0dd')
+          .fontColor(this.currentTab === 2 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
       }
       .layoutWeight(1)
       .width('100%')
@@ -655,10 +655,11 @@ struct Index {
     .opacity(this.navVisible ? 1 : 0)
     .scale({ x: this.navVisible ? 1 : 0.78, y: this.navVisible ? 1 : 0.78 })
     .animation({ duration: 220, curve: Curve.Friction })
-    .backgroundColor('rgba(30,30,40,0.62)')
+    .backgroundColor(this.c('rgba(30,30,40,0.62)', 'rgba(255,255,255,0.90)'))
     .backdropBlur(18)
     .borderRadius(23)
-    .shadow({ radius: 12, color: 'rgba(0,0,0,0.35)', offsetX: 0, offsetY: 4 })
+    .border({ width: this.isDark ? 0 : 1, color: 'rgba(0,0,0,0.06)' })
+    .shadow({ radius: 12, color: this.c('rgba(0,0,0,0.35)', 'rgba(0,0,0,0.10)'), offsetX: 0, offsetY: 4 })
     .justifyContent(FlexAlign.SpaceAround)
     .padding({ bottom: 5 })
   }
@@ -702,11 +703,11 @@ struct Index {
         // Header
         Row() {
           Button({ type: ButtonType.Normal }) {
-            Text('×').fontSize(20).fontColor('rgba(238,238,245,0.75)')
+            Text('×').fontSize(20).fontColor(this.c('rgba(238,238,245,0.75)', '#5C4F43'))
           }
-          .backgroundColor('rgba(255,255,255,0.08)').borderRadius(11).width(36).height(36)
+          .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.06)')).borderRadius(11).width(36).height(36)
           .onClick(() => { this.editToken = {} as Token; })
-          Text('编辑账号').fontSize(17).fontWeight(650).fontColor('#eeeef5')
+          Text('编辑账号').fontSize(17).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
           Text('').width(36).height(36)
         }
         .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 8 })
@@ -717,45 +718,45 @@ struct Index {
         Scroll() {
           Column({ space: 14 }) {
             Row() {
-              Logo({ brand: this.editBrand || (this.editToken?.brand ?? ''), logoSize: 64 })
+              Logo({ brand: this.editBrand || (this.editToken?.brand ?? ''), logoSize: 64, isDark: this.isDark, accentColor: this.accentColor })
             }
             .width('100%').padding({ top: 8, bottom: 8 }).justifyContent(FlexAlign.Center)
 
             Column({ space: 6 }) {
-              Text('品牌名称').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              Text('品牌名称').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
               TextInput({ text: this.editBrand, placeholder: '' })
                 .onChange((v) => { this.editBrand = v; })
-                .backgroundColor('#191920').fontColor('#eeeef5')
-                .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+                .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+                .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
                 .height(44).padding({ left: 14, right: 14 })
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
-              Text('账号信息').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              Text('账号信息').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
               TextInput({ text: this.editAccount, placeholder: '' })
                 .onChange((v) => { this.editAccount = v; })
-                .backgroundColor('#191920').fontColor('#eeeef5')
-                .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+                .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+                .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
                 .height(44).padding({ left: 14, right: 14 })
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
               Row({ space: 6 }) {
-                Text('Secret Key').fontSize(12).fontColor('rgba(238,238,245,0.45)').flexGrow(1)
+                Text('Secret Key').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74')).flexGrow(1)
                 if (this.isMember) {
                   Button({ type: ButtonType.Normal }) {
                     SymbolGlyph(this.editSecretVisible ? $r('sys.symbol.eye_slash') : $r('sys.symbol.eye'))
                       .fontSize(15).fontColor([this.accentColor])
                   }
                   .width(30).height(30).borderRadius(10)
-                  .backgroundColor('rgba(255,255,255,0.06)')
+                  .backgroundColor(this.c('rgba(255,255,255,0.06)', 'rgba(0,0,0,0.04)'))
                   .onClick(() => { this.editSecretVisible = !this.editSecretVisible; })
                   Button({ type: ButtonType.Normal }) {
                     SymbolGlyph($r('sys.symbol.qrcode'))
                       .fontSize(15).fontColor([this.accentColor])
                   }
                   .width(30).height(30).borderRadius(10)
-                  .backgroundColor('rgba(255,255,255,0.06)')
+                  .backgroundColor(this.c('rgba(255,255,255,0.06)', 'rgba(0,0,0,0.04)'))
                   .onClick(() => {
                     const t = this.editToken;
                     this.qrUri = 'otpauth://totp/' + encodeURIComponent(t.brand) + ':' +
@@ -769,13 +770,13 @@ struct Index {
               }.alignItems(VerticalAlign.Center)
               Text(this.isMember && this.editSecretVisible ? (this.editToken?.secret ?? '') : '*'.repeat(Math.min(this.editToken?.secret.length ?? 0, 20)))
                 .fontSize(13)
-                .fontColor(this.isMember && this.editSecretVisible ? '#eeeef5' : 'rgba(238,238,245,0.4)')
+                .fontColor(this.isMember && this.editSecretVisible ? this.c('#eeeef5', '#2C1810') : this.c('rgba(238,238,245,0.4)', '#8B7E74'))
                 .fontFamily('monospace').letterSpacing(1)
                 .width('100%').height(44)
                 .padding({ left: 14, right: 14 })
                 .textAlign(TextAlign.Start)
-                .backgroundColor('#191920')
-                .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+                .backgroundColor(this.c('#191920', '#FFFFFF'))
+                .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
                 .onClick(() => {
                   if (this.isMember && this.editSecretVisible && this.editToken?.secret) {
                     const d = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.editToken.secret);
@@ -785,7 +786,7 @@ struct Index {
                 })
               if (!this.isMember) {
                 Text('🔒 开通会员可查看密钥')
-                  .fontSize(11).fontColor('rgba(238,238,245,0.25)').margin({ top: 4 })
+                  .fontSize(11).fontColor(this.c('rgba(238,238,245,0.25)', '#A99E93')).margin({ top: 4 })
               }
             }
             .alignItems(HorizontalAlign.Start).width('100%')
@@ -807,8 +808,8 @@ struct Index {
               } else {
                 Row({ space: 10 }) {
                   Button('取消').flexGrow(1).backgroundColor(Color.Transparent)
-                    .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(14)
-                    .fontColor('rgba(238,238,245,0.6)').fontSize(14)
+                    .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(14)
+                    .fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).fontSize(14)
                     .onClick(() => { this.confirmDelete = false; })
                   Button('确认删除').flexGrow(1).backgroundColor('#ef4444').borderRadius(14)
                     .fontColor('#fff').fontSize(14).fontWeight(650)
@@ -821,7 +822,7 @@ struct Index {
           .padding({ left: 20, right: 20 })
         }.scrollBar(BarState.Off)
       }
-      .width('100%').height('100%').backgroundColor('#0d0d12')
+      .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
       .padding({ top: 44 })
     }
     .width('100%').height('100%').zIndex(300)
@@ -846,7 +847,7 @@ struct Index {
 
         Scroll() {
           Column({ space: 24 }) {
-            Logo({ brand: this.showQrToken?.brand ?? '', logoSize: 56 })
+            Logo({ brand: this.showQrToken?.brand ?? '', logoSize: 56, isDark: this.isDark, accentColor: this.accentColor })
             Column({ space: 12 }) {
               QRCode(this.qrUri)
                 .width(240).height(240)
@@ -1395,6 +1396,8 @@ struct Index {
             },
             onAboutTap: () => { this.showAbout = true; },
             isDark: this.isDark,
+            onNavHide: () => { this.navVisible = false; },
+            onNavShow: () => { this.navVisible = true; },
           })
         }
         .tabBar(this.tabIcon('profile', 2))

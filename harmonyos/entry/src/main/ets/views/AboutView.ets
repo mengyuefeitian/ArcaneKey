@@ -1,9 +1,9 @@
 import { common, Want } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 
-const AGREEMENT_TEXT: string = '用户协议\n\n欢迎使用玄钥（ArcaneKey）身份验证器。\n\n一、服务说明\n本软件由小安工作室提供，仅供个人非商业用途使用。使用本软件即表示您同意本协议的所有条款。\n\n二、数据安全\n您的 TOTP 验证码密钥仅存储在您的本地设备中，不会在未经授权的情况下上传至服务器。开通会员后，您可选择将加密备份上传至云端，密钥经过本地加密后再传输，我们无法获取您的明文密钥。\n\n三、免责声明\n本软件按现状提供，不作任何明示或暗示的保证。对于因使用本软件导致的任何直接或间接损失，本工作室不承担法律责任。\n\n四、协议变更\n本协议如有修改，将通过应用更新方式通知用户。继续使用即视为接受最新协议。\n\n如有疑问，请联系：mengyuefeitian@live.cn';
+const AGREEMENT_TEXT: string = '用户协议\n\n欢迎使用星枢令（ArcaneKey）身份验证器。\n\n一、服务说明\n本软件由小安工作室提供，仅供个人非商业用途使用。使用本软件即表示您同意本协议的所有条款。\n\n二、数据安全\n您的 TOTP 验证码密钥仅存储在您的本地设备中，不会在未经授权的情况下上传至服务器。开通会员后，您可选择将加密备份上传至云端，密钥经过本地加密后再传输，我们无法获取您的明文密钥。\n\n三、免责声明\n本软件按现状提供，不作任何明示或暗示的保证。对于因使用本软件导致的任何直接或间接损失，本工作室不承担法律责任。\n\n四、协议变更\n本协议如有修改，将通过应用更新方式通知用户。继续使用即视为接受最新协议。\n\n如有疑问，请联系：mengyuefeitian@live.cn';
 
-const PRIVACY_TEXT: string = '隐私政策\n\n玄钥（ArcaneKey）尊重并保护用户的个人隐私权。\n\n一、信息收集\n本应用收集的信息：\n· 设备账号信息（用于会员校验，仅本地存储）\n· 您主动提交的反馈内容（通过邮件发送）\n\n本应用不收集：\n· 您的 TOTP 密钥或验证码\n· 您的位置信息\n· 浏览行为或使用统计数据\n\n二、信息使用\n收集的信息仅用于提供应用核心功能，不会出售、出租或分享给第三方。\n\n三、数据存储\n所有 TOTP 密钥存储在设备本地 Preferences 中。云备份数据经过 XOR 加密处理后存储。\n\n如您对隐私保护有任何疑问，请发送邮件至：mengyuefeitian@live.cn';
+const PRIVACY_TEXT: string = '隐私政策\n\n星枢令（ArcaneKey）尊重并保护用户的个人隐私权。\n\n一、信息收集\n本应用收集的信息：\n· 设备账号信息（用于会员校验，仅本地存储）\n· 您主动提交的反馈内容（通过邮件发送）\n\n本应用不收集：\n· 您的 TOTP 密钥或验证码\n· 您的位置信息\n· 浏览行为或使用统计数据\n\n二、信息使用\n收集的信息仅用于提供应用核心功能，不会出售、出租或分享给第三方。\n\n三、数据存储\n所有 TOTP 密钥存储在设备本地 Preferences 中。云备份数据经过 XOR 加密处理后存储。\n\n如您对隐私保护有任何疑问，请发送邮件至：mengyuefeitian@live.cn';
 
 @Component
 export struct AboutView {
@@ -60,7 +60,7 @@ export struct AboutView {
               Image($r('app.media.logo_img'))
                 .width(72).height(72).borderRadius(20)
                 .shadow({ radius: 24, color: this.accentColor + '55', offsetX: 0, offsetY: 6 })
-              Text('玄钥')
+              Text('星枢令')
                 .fontSize(22).fontWeight(800).fontColor(this.c('#eeeef5', '#2C1810')).letterSpacing(-0.5)
               Text('身份验证器 · 守护你的数字安全')
                 .fontSize(13).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74'))
@@ -147,7 +147,7 @@ export struct AboutView {
             .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(18)
             .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
 
-            Text('玄钥 v1.0.0')
+            Text('星枢令 v1.0.0')
               .fontSize(12).fontColor(this.c('rgba(238,238,245,0.2)', '#A99E93'))
               .width('100%').textAlign(TextAlign.Center)
               .padding({ top: 8, bottom: 100 })
