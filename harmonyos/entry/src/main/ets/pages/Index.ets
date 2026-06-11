@@ -8,7 +8,7 @@ import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -17,6 +17,7 @@ import { ScanView } from '../views/ScanView';
 import { ProfileView } from '../views/ProfileView';
 import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
+import { AboutView } from '../views/AboutView';
 
 interface SaveOptions {
   newFileNames: string[];
@@ -106,6 +107,8 @@ struct Index {
 
   // ── Navigation safe area (gesture bar height in vp) ─────────────
   @State navSafeBottom: number = 34;
+  @State isDark: boolean = true;
+  @State showAbout: boolean = false;
 
   private timer: number = -1;
   private toastTimer: number = -1;
@@ -169,6 +172,7 @@ struct Index {
       this.tokens = (saved && saved.length > 0) ? saved : INITIAL_TOKENS.slice();
       const theme = await loadTheme();
       if (theme) { this.accentColor = theme.color; this.currentTheme = theme; }
+      this.isDark = await loadThemeMode();
       const member: MemberData = await loadMember();
       this.isMember = member.isMember;
       this.boundAccount = member.boundAccount;
@@ -1308,6 +1312,7 @@ struct Index {
             otpMap: this.otpMap,
             timeLeft: this.timeLeft_,
             accentColor: this.accentColor,
+            isDark: this.isDark,
             searching: $searching,
             searchQ: $searchQ,
             onEdit: (tok: Token) => {
@@ -1328,6 +1333,7 @@ struct Index {
         TabContent() {
           ScanView({
             accentColor: this.accentColor,
+            isDark: this.isDark,
             navBottomPad: 60 + this.navSafeBottom + 16,
             onAdd: (brand: string, account: string, secret: string) => {
               this.addToken(brand, account, secret);
@@ -1378,6 +1384,12 @@ struct Index {
             onAccountTap: () => { this.showAccountInfo = true; },
             onMembershipTap: () => { this.showMembership = true; },
             onFeedbackTap: () => { this.showFeedback = true; },
+            onToggleMode: () => {
+              this.isDark = !this.isDark;
+              saveThemeMode(this.isDark);
+            },
+            onAboutTap: () => { this.showAbout = true; },
+            isDark: this.isDark,
           })
         }
         .tabBar(this.tabIcon('profile', 2))
@@ -1409,7 +1421,15 @@ struct Index {
       if (this.showFeedback) {
         FeedbackView({
           accentColor: this.accentColor,
+          isDark: this.isDark,
           onClose: () => { this.showFeedback = false; }
+        })
+      }
+      if (this.showAbout) {
+        AboutView({
+          accentColor: this.accentColor,
+          isDark: this.isDark,
+          onClose: () => { this.showAbout = false; }
         })
       }
       if (this.showDeleteConfirm) {

@@ -5,6 +5,7 @@ import { scanBarcode, scanCore } from '@kit.ScanKit';
 @Component
 export struct ScanView {
   @Prop accentColor: string = '#4080D0';
+  @Prop isDark: boolean = true;
   @Prop navBottomPad: number = 110;
   onAdd: (brand: string, account: string, secret: string) => void = () => {};
   onClose: () => void = () => {};
