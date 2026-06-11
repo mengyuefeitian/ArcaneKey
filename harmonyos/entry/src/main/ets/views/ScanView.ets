@@ -5,6 +5,7 @@ import { scanBarcode, scanCore } from '@kit.ScanKit';
 @Component
 export struct ScanView {
   @Prop accentColor: string = '#4080D0';
+  @Prop isDark: boolean = true;
   @Prop navBottomPad: number = 110;
   onAdd: (brand: string, account: string, secret: string) => void = () => {};
   onClose: () => void = () => {};
@@ -18,6 +19,8 @@ export struct ScanView {
   @State scanned: boolean = false;
   @State scanning: boolean = false;
   @State scanErrMsg: string = '';
+
+  private c(dark: string, light: string): string { return this.isDark ? dark : light; }
 
   aboutToAppear(): void {
     // Reset all state variables
@@ -124,13 +127,13 @@ export struct ScanView {
       // Header
       Row({ space: 12 }) {
         Button({ type: ButtonType.Normal }) {
-          Text('×').fontSize(20).fontColor('rgba(238,238,245,0.75)')
+          Text('×').fontSize(20).fontColor(this.c('rgba(238,238,245,0.75)', '#5C4F43'))
         }
-        .backgroundColor('rgba(255,255,255,0.08)').borderRadius(11)
+        .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.06)')).borderRadius(11)
         .width(36).height(36)
         .onClick(() => this.onClose())
 
-        Text('添加账号').fontSize(17).fontWeight(650).fontColor('#eeeef5')
+        Text('添加账号').fontSize(17).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
       }
       .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 0 })
 
@@ -140,14 +143,14 @@ export struct ScanView {
           Text(label)
             .flexGrow(1).textAlign(TextAlign.Center)
             .fontSize(12).fontWeight(this.tab === idx ? 650 : 400)
-            .fontColor(this.tab === idx ? '#fff' : 'rgba(238,238,245,0.45)')
+            .fontColor(this.tab === idx ? '#fff' : this.c('rgba(238,238,245,0.45)', '#8B7E74'))
             .backgroundColor(this.tab === idx ? this.accentColor : Color.Transparent)
             .borderRadius(10).padding({ top: 8, bottom: 8 })
             .onClick(() => { this.tab = idx; })
         }, (label: string) => label)
       }
       .margin({ left: 16, right: 16, top: 14 })
-      .padding(4).backgroundColor('#191920').borderRadius(13)
+      .padding(4).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(13)
       .width('calc(100% - 32vp)')
 
       // Scan error toast
@@ -214,12 +217,12 @@ export struct ScanView {
           .width('100%').constraintSize({ maxWidth: 310 }).aspectRatio(1).alignContent(Alignment.TopStart)
 
           Text(this.scanning ? '正在识别二维码…' : '点击下方按钮扫描二维码')
-            .fontSize(13).fontColor('rgba(238,238,245,0.4)').textAlign(TextAlign.Center)
+            .fontSize(13).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74')).textAlign(TextAlign.Center)
 
           Button(this.scanning ? '识别中…' : '扫描二维码')
             .width('100%').height(50).borderRadius(15)
             .backgroundColor(this.scanning ? 'rgba(255,255,255,0.07)' : this.accentColor)
-            .fontColor(this.scanning ? 'rgba(238,238,245,0.4)' : '#fff')
+            .fontColor(this.scanning ? this.c('rgba(238,238,245,0.4)', '#A99E93') : '#fff')
             .fontSize(15).fontWeight(650)
             .enabled(!this.scanning)
             .onClick(() => this.doScan(false))
@@ -230,10 +233,10 @@ export struct ScanView {
         Column({ space: 18 }) {
           Text('🖼️').fontSize(38)
             .width(88).height(88).textAlign(TextAlign.Center)
-            .backgroundColor('#191920').borderRadius(24)
-            .border({ width: 1, color: 'rgba(255,255,255,0.07)' })
+            .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(24)
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.07)', '#E8E2D9') })
           Text('从相册中选择含二维码的图片\n自动识别并添加账号')
-            .fontSize(14).fontColor('rgba(238,238,245,0.5)').textAlign(TextAlign.Center)
+            .fontSize(14).fontColor(this.c('rgba(238,238,245,0.5)', '#5C4F43')).textAlign(TextAlign.Center)
           Button('选择图片')
             .width('100%').height(50).borderRadius(15)
             .backgroundColor(this.accentColor).fontColor('#fff').fontSize(15).fontWeight(650)
@@ -246,53 +249,53 @@ export struct ScanView {
           Column({ space: 14 }) {
             Column({ space: 6 }) {
               Row({ space: 4 }) {
-                Text('品牌名称').fontSize(12).fontColor('rgba(238,238,245,0.45)').fontWeight(500)
+                Text('品牌名称').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74')).fontWeight(500)
                 Text('*').fontSize(12).fontColor(this.accentColor)
               }
               TextInput({ text: this.brand, placeholder: '如 Google、Microsoft…' })
                 .onChange((v) => { this.brand = v; this.brandErr = ''; })
-                .backgroundColor('#191920').fontColor('#eeeef5')
-                .border({ width: 1, color: this.brandErr ? '#f87171' : 'rgba(255,255,255,0.08)' })
-                .borderRadius(12).placeholderColor('rgba(238,238,245,0.25)')
+                .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+                .border({ width: 1, color: this.brandErr ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
+                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
                 .height(44).padding({ left: 14, right: 14 })
               if (this.brandErr) { Text(this.brandErr).fontSize(11).fontColor('#f87171') }
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
-              Text('账号信息').fontSize(12).fontColor('rgba(238,238,245,0.45)').fontWeight(500)
+              Text('账号信息').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74')).fontWeight(500)
               TextInput({ text: this.account, placeholder: '邮箱、用户名等' })
                 .onChange((v) => { this.account = v; })
-                .backgroundColor('#191920').fontColor('#eeeef5')
-                .border({ width: 1, color: 'rgba(255,255,255,0.08)' })
-                .borderRadius(12).placeholderColor('rgba(238,238,245,0.25)')
+                .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+                .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
+                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
                 .height(44).padding({ left: 14, right: 14 })
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
               Row({ space: 4 }) {
-                Text('Secret Key').fontSize(12).fontColor('rgba(238,238,245,0.45)').fontWeight(500)
+                Text('Secret Key').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74')).fontWeight(500)
                 Text('*').fontSize(12).fontColor(this.accentColor)
               }
               TextInput({ text: this.secret, placeholder: 'Base32 密钥，如 JBSWY3DP…' })
                 .onChange((v) => { this.secret = v; this.secretErr = ''; })
-                .backgroundColor('#191920').fontColor('#eeeef5').fontFamily('monospace')
-                .border({ width: 1, color: this.secretErr ? '#f87171' : 'rgba(255,255,255,0.08)' })
-                .borderRadius(12).placeholderColor('rgba(238,238,245,0.25)')
+                .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810')).fontFamily('monospace')
+                .border({ width: 1, color: this.secretErr ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
+                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
                 .height(44).padding({ left: 14, right: 14 })
               if (this.secretErr) { Text(this.secretErr).fontSize(11).fontColor('#f87171') }
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             if (this.brand.trim()) {
               Row({ space: 12 }) {
-                Logo({ brand: this.brand, logoSize: 36 })
+                Logo({ brand: this.brand, logoSize: 36, isDark: this.isDark, accentColor: this.accentColor })
                 Column({ space: 2 }) {
-                  Text(this.brand).fontSize(14).fontColor('#eeeef5').fontWeight(600)
-                  if (this.account) { Text(this.account).fontSize(12).fontColor('rgba(238,238,245,0.4)') }
+                  Text(this.brand).fontSize(14).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(600)
+                  if (this.account) { Text(this.account).fontSize(12).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74')) }
                 }.alignItems(HorizontalAlign.Start).flexGrow(1)
-                Text('预览').fontSize(11).fontColor('rgba(238,238,245,0.3)')
+                Text('预览').fontSize(11).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
               }
-              .padding(12).backgroundColor('#191920').borderRadius(12)
-              .border({ width: 1, color: 'rgba(255,255,255,0.06)' }).width('100%')
+              .padding(12).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(12)
+              .border({ width: 1, color: this.c('rgba(255,255,255,0.06)', '#E8E2D9') }).width('100%')
             }
 
             Button('添加账号')
@@ -308,7 +311,7 @@ export struct ScanView {
         .scrollBar(BarState.Off).flexGrow(1)
       }
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ bottom: this.navBottomPad })
     .clip(true)
   }

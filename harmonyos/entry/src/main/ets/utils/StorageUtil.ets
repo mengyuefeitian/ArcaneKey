@@ -112,3 +112,23 @@ export async function saveLogin(loggedIn: boolean, userName: string, userPhone: 
     await pref.flush();
   } catch (_) {}
 }
+
+const DARK_MODE_KEY = 'ak_dark_mode';
+
+export async function loadThemeMode(): Promise<boolean> {
+  try {
+    if (!pref) return true;
+    const val = await pref.get(DARK_MODE_KEY, true);
+    return typeof val === 'boolean' ? (val as boolean) : true;
+  } catch (_) {
+    return true;
+  }
+}
+
+export async function saveThemeMode(isDark: boolean): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(DARK_MODE_KEY, isDark);
+    await pref.flush();
+  } catch (_) {}
+}

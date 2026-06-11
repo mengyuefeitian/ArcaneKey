@@ -13,9 +13,11 @@ export struct TokenCard {
   @Prop otp: OtpPair = { current: '------', next: '------' };
   @Prop timeLeft: number = 30;
   @Prop accentColor: string = '#4080D0';
+  @Prop isDark: boolean = true;
   onEdit: (tok: Token) => void = () => {};
   onCopy: (code: string, brand: string) => void = () => {};
   onDelete: (tok: Token) => void = () => {};
+  private c(dark: string, light: string): string { return this.isDark ? dark : light; }
   private interpolateColor(hex: string, t: number): string {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -48,12 +50,12 @@ export struct TokenCard {
     Column() {
         // Upper row — edit
         Row({ space: 12 }) {
-          Logo({ brand: this.token.brand, logoSize: 42 })
+          Logo({ brand: this.token.brand, logoSize: 42, isDark: this.isDark, accentColor: this.accentColor })
           Column({ space: 2 }) {
             Text(this.token.brand)
-              .fontSize(15).fontWeight(650).fontColor('#eeeef5').maxLines(1)
+              .fontSize(15).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810')).maxLines(1)
             Text(this.token.account)
-              .fontSize(12).fontColor('rgba(238,238,245,0.42)').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.42)', '#8B7E74')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .alignItems(HorizontalAlign.Start)
           .flexGrow(1)
@@ -64,7 +66,7 @@ export struct TokenCard {
         .padding({ left: 16, right: 16, top: 14, bottom: 10 })
         .onClick(() => this.onEdit(this.token))
 
-        Divider().color('rgba(255,255,255,0.055)').strokeWidth(1).margin({ left: 16, right: 16 })
+        Divider().color(this.c('rgba(255,255,255,0.055)', 'rgba(0,0,0,0.07)')).strokeWidth(1).margin({ left: 16, right: 16 })
 
         // Lower row — copy
         Row() {
@@ -92,14 +94,14 @@ export struct TokenCard {
           Blank()
           Column({ space: 2 }) {
             Row({ space: 3 }) {
-              Text('📋').fontSize(10).fontColor('rgba(238,238,245,0.28)')
-              Text('点击复制').fontSize(10).fontColor('rgba(238,238,245,0.28)')
+              Text('📋').fontSize(10).fontColor(this.c('rgba(238,238,245,0.28)', 'rgba(44,24,16,0.35)'))
+              Text('点击复制').fontSize(10).fontColor(this.c('rgba(238,238,245,0.28)', 'rgba(44,24,16,0.35)'))
             }
             Row({ space: 5 }) {
-              Text('下一个').fontSize(10).fontColor('rgba(238,238,245,0.28)')
+              Text('下一个').fontSize(10).fontColor(this.c('rgba(238,238,245,0.28)', 'rgba(44,24,16,0.35)'))
               Text(fmt(this.otp.next))
                 .fontSize(13).fontWeight(600)
-                .fontColor('rgba(238,238,245,0.32)')
+                .fontColor(this.c('rgba(238,238,245,0.32)', 'rgba(44,24,16,0.42)'))
                 .fontFamily('monospace').letterSpacing(2)
             }
           }
@@ -111,8 +113,8 @@ export struct TokenCard {
       }
       .width('100%')
       .borderRadius(18)
-      .backgroundColor('#191920')
-      .border({ width: 1, color: 'rgba(255,255,255,0.05)' })
+      .backgroundColor(this.c('#191920', '#FFFFFF'))
+      .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
       .clip(true)
       .bindContextMenu(this.contextMenu(), ResponseType.LongPress)
       .margin({ bottom: 10 })
