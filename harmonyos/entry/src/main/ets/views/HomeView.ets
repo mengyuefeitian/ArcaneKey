@@ -7,6 +7,7 @@ export struct HomeView {
   @Prop otpMap: Record<string, OtpPair> = {};
   @Prop timeLeft: number = 30;
   @Prop accentColor: string = '#4080D0';
+  @Prop isDark: boolean = true;
   @Link searching: boolean;
   @Link searchQ: string;
   onEdit: (tok: Token) => void = () => {};
@@ -16,6 +17,9 @@ export struct HomeView {
   onNavShow: () => void = () => {};
 
   private lastScrollY: number = 0;
+  private scrollTimer: number = -1;
+
+  private c(dark: string, light: string): string { return this.isDark ? dark : light; }
 
   @Builder
   DeleteAction(tok: Token) {
@@ -48,19 +52,19 @@ export struct HomeView {
         Row({ space: 6 }) {
           // Back arrow
           Text('←')
-            .fontSize(16).fontColor('rgba(238,238,245,0.55)')
+            .fontSize(16).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43'))
             .width(28).height(28)
             .textAlign(TextAlign.Center)
             .onClick(() => { this.searching = false; this.searchQ = ''; })
           // Search icon
           SymbolGlyph($r('sys.symbol.magnifyingglass'))
-            .fontColor(['rgba(238,238,245,0.55)'])
+            .fontColor([this.c('rgba(238,238,245,0.55)', '#5C4F43')])
             .fontSize(18)
           TextInput({ text: this.searchQ, placeholder: '搜索品牌或账号' })
             .flexGrow(1)
             .backgroundColor(Color.Transparent)
-            .fontColor('#eeeef5')
-            .placeholderColor('rgba(238,238,245,0.25)')
+            .fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
             .fontSize(13)
             .height(28)
             .padding(0)
@@ -68,7 +72,7 @@ export struct HomeView {
           // Clear button
           if (this.searchQ.length > 0) {
             Text('×')
-              .fontSize(16).fontWeight(500).fontColor('rgba(238,238,245,0.5)')
+              .fontSize(16).fontWeight(500).fontColor(this.c('rgba(238,238,245,0.5)', '#5C4F43'))
               .width(20).height(20)
               .textAlign(TextAlign.Center)
               .onClick(() => { this.searchQ = ''; })
@@ -77,7 +81,7 @@ export struct HomeView {
         .height(36)
         .padding({ left: 16, right: 16, top: 6, bottom: 6 })
         .margin({ left: 16, right: 16, top: 8, bottom: 8 })
-        .backgroundColor('#191920')
+        .backgroundColor(this.c('#191920', '#FFFFFF'))
         .borderRadius(10)
         .border({ width: 1, color: this.accentColor + '55' })
         .alignItems(VerticalAlign.Center)
@@ -90,7 +94,7 @@ export struct HomeView {
             Column({ space: 12 }) {
               Text('🔍').fontSize(36)
               Text(this.searchQ ? '未找到匹配账号' : '暂无验证码\n点击下方扫码添加')
-                .fontSize(14).fontColor('rgba(238,238,245,0.25)').textAlign(TextAlign.Center)
+                .fontSize(14).fontColor(this.c('rgba(238,238,245,0.25)', '#A99E93')).textAlign(TextAlign.Center)
             }
             .width('100%')
             .padding({ top: 70, bottom: 70 })
@@ -104,6 +108,7 @@ export struct HomeView {
               otp: this.otpMap[tok.id] ?? { current: '------', next: '------' },
               timeLeft: this.timeLeft,
               accentColor: this.accentColor,
+              isDark: this.isDark,
               onEdit: (t: Token) => this.onEdit(t),
               onCopy: (code: string, brand: string) => this.onCopy(code, brand),
               onDelete: (t: Token) => this.onDelete(t),
@@ -119,19 +124,23 @@ export struct HomeView {
       .scrollBar(BarState.Off)
       .onScrollFrameBegin((offset: number) => {
         const y = this.scroller.currentOffset().yOffset + offset;
-        if (y < 30) {
+        if (y < 30 || y < this.lastScrollY) {
+          clearTimeout(this.scrollTimer);
           this.onNavShow();
         } else if (y > this.lastScrollY) {
+          clearTimeout(this.scrollTimer);
           this.onNavHide();
-        } else {
-          this.onNavShow();
         }
         this.lastScrollY = y;
         return { offsetRemain: offset };
       })
+      .onScrollStop(() => {
+        clearTimeout(this.scrollTimer);
+        this.scrollTimer = setTimeout(() => { this.onNavShow(); }, 400);
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#0d0d12')
+    .backgroundColor(this.c('#0d0d12', '#FAF7F2'))
   }
 }
