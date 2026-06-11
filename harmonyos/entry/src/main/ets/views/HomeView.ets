@@ -17,6 +17,7 @@ export struct HomeView {
   onNavShow: () => void = () => {};
 
   private lastScrollY: number = 0;
+  private scrollTimer: number = -1;
 
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
 
@@ -107,6 +108,7 @@ export struct HomeView {
               otp: this.otpMap[tok.id] ?? { current: '------', next: '------' },
               timeLeft: this.timeLeft,
               accentColor: this.accentColor,
+              isDark: this.isDark,
               onEdit: (t: Token) => this.onEdit(t),
               onCopy: (code: string, brand: string) => this.onCopy(code, brand),
               onDelete: (t: Token) => this.onDelete(t),
@@ -122,15 +124,19 @@ export struct HomeView {
       .scrollBar(BarState.Off)
       .onScrollFrameBegin((offset: number) => {
         const y = this.scroller.currentOffset().yOffset + offset;
-        if (y < 30) {
+        if (y < 30 || y < this.lastScrollY) {
+          clearTimeout(this.scrollTimer);
           this.onNavShow();
         } else if (y > this.lastScrollY) {
+          clearTimeout(this.scrollTimer);
           this.onNavHide();
-        } else {
-          this.onNavShow();
         }
         this.lastScrollY = y;
         return { offsetRemain: offset };
+      })
+      .onScrollStop(() => {
+        clearTimeout(this.scrollTimer);
+        this.scrollTimer = setTimeout(() => { this.onNavShow(); }, 400);
       })
     }
     .width('100%')

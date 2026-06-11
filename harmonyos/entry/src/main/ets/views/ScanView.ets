@@ -287,7 +287,7 @@ export struct ScanView {
 
             if (this.brand.trim()) {
               Row({ space: 12 }) {
-                Logo({ brand: this.brand, logoSize: 36 })
+                Logo({ brand: this.brand, logoSize: 36, isDark: this.isDark, accentColor: this.accentColor })
                 Column({ space: 2 }) {
                   Text(this.brand).fontSize(14).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(600)
                   if (this.account) { Text(this.account).fontSize(12).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74')) }
