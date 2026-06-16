@@ -15,6 +15,18 @@
 
 ---
 
+## 立即体验
+
+**微信小程序** — 无需安装，扫码直接使用：
+
+<p align="center">
+  <img src="image/miniprogram-qrcode.jpg" width="220" alt="星枢令微信小程序二维码"/>
+</p>
+
+<p align="center">微信扫描上方二维码，即可体验星枢令小程序</p>
+
+---
+
 ## 简介
 
 **星枢令**是一款支持 TOTP 标准的双因素身份验证器，兼容所有支持 Google Authenticator 协议的平台（Gmail、GitHub、Microsoft、支付宝等）。验证码每 30 秒自动刷新，密钥仅存储在本地设备，从不上传服务器。
