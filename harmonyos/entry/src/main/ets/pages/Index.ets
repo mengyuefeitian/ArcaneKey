@@ -109,6 +109,8 @@ struct Index {
   @State navSafeBottom: number = 34;
   @State isDark: boolean = true;
   @State showAbout: boolean = false;
+  @State showAgreement: boolean = false;
+  @State showPrivacy: boolean = false;
 
   private timer: number = -1;
   private toastTimer: number = -1;
@@ -116,6 +118,48 @@ struct Index {
   private autoSyncTimer: number = -1;
 
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
+
+  // ── Back navigation ─────────────────────────────────────────────
+  onBackPress(): boolean {
+    if (this.showAgreement || this.showPrivacy) {
+      this.showAgreement = false;
+      this.showPrivacy = false;
+      return true;
+    }
+    if (this.showAbout) {
+      this.showAbout = false;
+      return true;
+    }
+    if (this.showFeedback) {
+      this.showFeedback = false;
+      return true;
+    }
+    if (this.showLogin) {
+      this.showLogin = false;
+      return true;
+    }
+    if (this.showBackup) {
+      this.showBackup = false;
+      return true;
+    }
+    if (this.showImport) {
+      this.showImport = false;
+      return true;
+    }
+    if (this.showTheme) {
+      this.showTheme = false;
+      return true;
+    }
+    if (this.showMembership) {
+      this.showMembership = false;
+      return true;
+    }
+    if (this.showDeleteConfirm) {
+      this.showDeleteConfirm = false;
+      return true;
+    }
+    return false;
+  }
 
   // ── Lifecycle ───────────────────────────────────────────────────
   aboutToAppear(): void {
@@ -1439,6 +1483,8 @@ struct Index {
         AboutView({
           accentColor: this.accentColor,
           isDark: this.isDark,
+          showAgreement: $showAgreement,
+          showPrivacy: $showPrivacy,
           onClose: () => { this.showAbout = false; }
         })
           .position({ x: 0, y: 0 })
