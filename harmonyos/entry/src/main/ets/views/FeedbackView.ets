@@ -34,7 +34,7 @@ export struct FeedbackView {
       Scroll() {
         Column({ space: 16 }) {
           // Feedback type
-          Text('反馈类型').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+          Text('反馈类型').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           Row({ space: 8 }) {
             Button('需求').flexGrow(1)
               .backgroundColor(this.type === '需求' ? this.accentColor + '18' : Color.Transparent)
@@ -51,19 +51,19 @@ export struct FeedbackView {
           }.width('100%')
 
           // Content
-          Text('反馈内容 *').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+          Text('反馈内容 *').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextArea({ text: this.content, placeholder: '请描述您的问题或建议（至少10个字，最多500字）' })
             .onChange((v: string) => { this.content = v; })
             .height(140).backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
-            .fontSize(14).placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
+            .fontSize(14).placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
 
           Text(`${this.content.length}/500`)
-            .fontSize(11).fontColor(this.content.length > 500 ? '#f87171' : this.c('rgba(238,238,245,0.25)', '#A99E93'))
+            .fontSize(11).fontColor(this.content.length > 500 ? '#f87171' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             .textAlign(TextAlign.End).width('100%')
 
           // Contact
-          Text('联系邮箱 *').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+          Text('联系邮箱 *').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextInput({ text: this.contact, placeholder: '请输入邮箱地址' })
             .onChange((v: string) => { this.contact = v; })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
@@ -77,12 +77,12 @@ export struct FeedbackView {
           Button(this.sending ? '提交中…' : '提交反馈')
             .width('100%').height(50).borderRadius(15)
             .backgroundColor(this.canSubmit ? this.accentColor : this.c('#191920', '#F5F0EA'))
-            .fontColor(this.canSubmit ? '#fff' : this.c('rgba(238,238,245,0.3)', '#A99E93'))
+            .fontColor(this.canSubmit ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             .fontSize(15).fontWeight(650)
             .onClick(() => this.submitFeedback())
 
           Text('您的反馈将发送至开发团队，我们认真对待每一条建议')
-            .fontSize(11).fontColor(this.c('rgba(238,238,245,0.2)', '#A99E93')).textAlign(TextAlign.Center)
+            .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
         }
         .padding({ left: 20, right: 20, top: 4, bottom: 40 })
       }.scrollBar(BarState.Off).flexGrow(1)

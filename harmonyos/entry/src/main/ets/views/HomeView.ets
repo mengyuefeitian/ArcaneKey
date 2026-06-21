@@ -64,7 +64,7 @@ export struct HomeView {
             .flexGrow(1)
             .backgroundColor(Color.Transparent)
             .fontColor(this.c('#eeeef5', '#2C1810'))
-            .placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
+            .placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
             .fontSize(13)
             .height(28)
             .padding(0)
@@ -94,7 +94,7 @@ export struct HomeView {
             Column({ space: 12 }) {
               Text('🔍').fontSize(36)
               Text(this.searchQ ? '未找到匹配账号' : '暂无验证码\n点击下方扫码添加')
-                .fontSize(14).fontColor(this.c('rgba(238,238,245,0.25)', '#A99E93')).textAlign(TextAlign.Center)
+                .fontSize(14).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
             }
             .width('100%')
             .padding({ top: 70, bottom: 70 })

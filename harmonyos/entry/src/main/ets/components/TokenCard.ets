@@ -55,7 +55,7 @@ export struct TokenCard {
             Text(this.token.brand)
               .fontSize(15).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810')).maxLines(1)
             Text(this.token.account)
-              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.42)', '#8B7E74')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .alignItems(HorizontalAlign.Start)
           .flexGrow(1)
@@ -94,14 +94,14 @@ export struct TokenCard {
           Blank()
           Column({ space: 2 }) {
             Row({ space: 3 }) {
-              Text('📋').fontSize(10).fontColor(this.c('rgba(238,238,245,0.28)', 'rgba(44,24,16,0.35)'))
-              Text('点击复制').fontSize(10).fontColor(this.c('rgba(238,238,245,0.28)', 'rgba(44,24,16,0.35)'))
+              Text('📋').fontSize(10).fontColor(this.c('rgba(238,238,245,0.60)', 'rgba(44,24,16,0.70)'))
+              Text('点击复制').fontSize(10).fontColor(this.c('rgba(238,238,245,0.60)', 'rgba(44,24,16,0.70)'))
             }
             Row({ space: 5 }) {
-              Text('下一个').fontSize(10).fontColor(this.c('rgba(238,238,245,0.28)', 'rgba(44,24,16,0.35)'))
+              Text('下一个').fontSize(10).fontColor(this.c('rgba(238,238,245,0.60)', 'rgba(44,24,16,0.70)'))
               Text(fmt(this.otp.next))
                 .fontSize(13).fontWeight(600)
-                .fontColor(this.c('rgba(238,238,245,0.32)', 'rgba(44,24,16,0.42)'))
+                .fontColor(this.c('rgba(238,238,245,0.65)', 'rgba(44,24,16,0.75)'))
                 .fontFamily('monospace').letterSpacing(2)
             }
           }
