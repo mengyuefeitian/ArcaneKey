@@ -233,7 +233,7 @@ export struct AboutView {
               Text('星枢令')
                 .fontSize(22).fontWeight(800).fontColor(this.c('#eeeef5', '#2C1810')).letterSpacing(-0.5)
               Text('身份验证器 · 守护你的数字安全')
-                .fontSize(13).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74'))
+                .fontSize(13).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
             }.width('100%').alignItems(HorizontalAlign.Center).padding({ top: 16, bottom: 8 })
 
             // Info list
@@ -246,9 +246,9 @@ export struct AboutView {
                     .backgroundColor(this.accentColor + '28').margin({ right: 14 })
                   Column({ space: 2 }) {
                     Text('用户协议').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                    Text('查看服务条款').fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                    Text('查看服务条款').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                   }.alignItems(HorizontalAlign.Start).flexGrow(1)
-                  Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+                  Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
                 }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
                 .onClick(() => { this.showAgreement = true; })
                 Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
@@ -261,9 +261,9 @@ export struct AboutView {
                     .backgroundColor(this.accentColor + '28').margin({ right: 14 })
                   Column({ space: 2 }) {
                     Text('隐私政策').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                    Text('了解数据保护').fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                    Text('了解数据保护').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                   }.alignItems(HorizontalAlign.Start).flexGrow(1)
-                  Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+                  Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
                 }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
                 .onClick(() => { this.showPrivacy = true; })
                 Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
@@ -276,10 +276,10 @@ export struct AboutView {
                     .backgroundColor(this.accentColor + '28').margin({ right: 14 })
                   Column({ space: 2 }) {
                     Text('邮箱').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                    Text('mengyuefeitian@live.cn').fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                    Text('mengyuefeitian@live.cn').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                   }.alignItems(HorizontalAlign.Start).flexGrow(1)
                   Text(this.emailCopied ? '已复制 ✓' : '复制')
-                    .fontSize(12).fontColor(this.emailCopied ? this.c('rgba(238,238,245,0.38)', '#8B7E74') : this.accentColor)
+                    .fontSize(12).fontColor(this.emailCopied ? this.c('rgba(238,238,245,0.65)', '#6B5B50') : this.accentColor)
                 }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
                 .onClick(() => { this.copyEmail(); })
                 Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
@@ -292,9 +292,9 @@ export struct AboutView {
                     .backgroundColor(this.accentColor + '28').margin({ right: 14 })
                   Column({ space: 2 }) {
                     Text('官网').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                    Text('www.xiaoanhome.xyz').fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                    Text('www.xiaoanhome.xyz').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                   }.alignItems(HorizontalAlign.Start).flexGrow(1)
-                  Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+                  Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
                 }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
                 .onClick(() => { this.openUrl('https://www.xiaoanhome.xyz'); })
                 Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
@@ -307,9 +307,9 @@ export struct AboutView {
                     .backgroundColor(this.accentColor + '28').margin({ right: 14 })
                   Column({ space: 2 }) {
                     Text('备案').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                    Text('京ICP备2026021298号-4A').fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                    Text('京ICP备2026021298号-4A').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                   }.alignItems(HorizontalAlign.Start).flexGrow(1)
-                  Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+                  Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
                 }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
                 .onClick(() => { this.openUrl('https://beian.miit.gov.cn/'); })
               }
@@ -318,7 +318,7 @@ export struct AboutView {
             .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
 
             Text('星枢令 v1.0.0')
-              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.2)', '#A99E93'))
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
               .width('100%').textAlign(TextAlign.Center)
               .padding({ top: 8, bottom: 100 })
           }

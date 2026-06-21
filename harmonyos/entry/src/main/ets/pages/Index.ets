@@ -75,6 +75,7 @@ struct Index {
 
   // ── HarmonyOS Login Flag ────────────────────────────────────────
   @State harmonyLogin: boolean = false;
+  @State userOpenId: string = '';
   @State showAccountInfo: boolean = false;
   @State privacyAgreed: boolean = false;
 
@@ -118,6 +119,18 @@ struct Index {
   private autoSyncTimer: number = -1;
 
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
+
+  private async updateStatusBarColor(): Promise<void> {
+    try {
+      const ctx = AppStorage.get<common.UIAbilityContext>('context');
+      if (!ctx) return;
+      const win = await window.getLastWindow(ctx);
+      await win.setWindowSystemBarProperties({
+        statusBarContentColor: this.isDark ? '#FFFFFF' : '#000000',
+        navigationBarContentColor: this.isDark ? '#FFFFFF' : '#000000'
+      });
+    } catch (_) {}
+  }
 
   // ── Back navigation ─────────────────────────────────────────────
   onBackPress(): boolean {
@@ -212,6 +225,7 @@ struct Index {
         this.userPhone = loginData.userPhone;
         this.userAvatar = loginData.userAvatar;
         this.harmonyLogin = loginData.harmonyLogin;
+        this.userOpenId = loginData.userOpenId || '';
       }
 
       const saved = await loadTokens();
@@ -219,6 +233,7 @@ struct Index {
       const theme = await loadTheme();
       if (theme) { this.accentColor = theme.color; this.currentTheme = theme; }
       this.isDark = await loadThemeMode();
+      this.updateStatusBarColor();
       const member: MemberData = await loadMember();
       this.isMember = member.isMember;
       this.boundAccount = member.boundAccount;
@@ -348,33 +363,32 @@ struct Index {
       const controller = new authentication.AuthenticationController(ctx);
       const resp = await controller.executeRequest(request);
       const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
+      const openId = cred?.openID || '';
+      console.info(`[ArcaneKey] HuaweiID auth success: openID=${openId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
       this.loggedIn = true;
+      this.userOpenId = openId;
       this.userName = cred?.nickName || '华为用户';
       this.userAvatar = cred?.avatarUri || '';
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-
-      // Save login state to preferences
-      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true);
-
-      this.toast(`登录成功`);
+      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, openId);
+      this.toast('登录成功');
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
         this.toast('已取消登录');
       } else {
+        console.warn(`[ArcaneKey] HuaweiID auth error: code=${code}`);
         this.loggedIn = true;
+        this.userOpenId = '';
         this.userName = '华为用户';
         this.userAvatar = '';
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-
-        // Save login state to preferences
-        await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true);
-
-        this.toast(`登录成功`);
+        await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, '');
+        this.toast('登录成功');
       }
     }
   }
@@ -551,7 +565,7 @@ struct Index {
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
       const tokenResult = await launchPurchase(ctx);
-      await saveMember(true, this.userName);
+      await saveMember(true, this.userName, this.userOpenId);
       this.isMember = true;
       this.boundAccount = this.userName;
       this.toast('开通成功');
@@ -581,7 +595,7 @@ struct Index {
       const result = await restoreOwnedPurchases(ctx);
       if (result) {
         const bound = this.userName || this.boundAccount;
-        await saveMember(true, bound);
+        await saveMember(true, bound, this.userOpenId);
         this.isMember = true;
         this.boundAccount = bound;
         this.toast('会员已恢复');
@@ -767,7 +781,7 @@ struct Index {
             .width('100%').padding({ top: 8, bottom: 8 }).justifyContent(FlexAlign.Center)
 
             Column({ space: 6 }) {
-              Text('品牌名称').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+              Text('品牌名称').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               TextInput({ text: this.editBrand, placeholder: '' })
                 .onChange((v) => { this.editBrand = v; })
                 .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
@@ -776,7 +790,7 @@ struct Index {
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
-              Text('账号信息').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+              Text('账号信息').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               TextInput({ text: this.editAccount, placeholder: '' })
                 .onChange((v) => { this.editAccount = v; })
                 .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
@@ -786,7 +800,7 @@ struct Index {
 
             Column({ space: 6 }) {
               Row({ space: 6 }) {
-                Text('Secret Key').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74')).flexGrow(1)
+                Text('Secret Key').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).flexGrow(1)
                 if (this.isMember) {
                   Button({ type: ButtonType.Normal }) {
                     SymbolGlyph(this.editSecretVisible ? $r('sys.symbol.eye_slash') : $r('sys.symbol.eye'))
@@ -814,7 +828,7 @@ struct Index {
               }.alignItems(VerticalAlign.Center)
               Text(this.isMember && this.editSecretVisible ? (this.editToken?.secret ?? '') : '*'.repeat(Math.min(this.editToken?.secret.length ?? 0, 20)))
                 .fontSize(13)
-                .fontColor(this.isMember && this.editSecretVisible ? this.c('#eeeef5', '#2C1810') : this.c('rgba(238,238,245,0.4)', '#8B7E74'))
+                .fontColor(this.isMember && this.editSecretVisible ? this.c('#eeeef5', '#2C1810') : this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                 .fontFamily('monospace').letterSpacing(1)
                 .width('100%').height(44)
                 .padding({ left: 14, right: 14 })
@@ -830,7 +844,7 @@ struct Index {
                 })
               if (!this.isMember) {
                 Text('🔒 开通会员可查看密钥')
-                  .fontSize(11).fontColor(this.c('rgba(238,238,245,0.25)', '#A99E93')).margin({ top: 4 })
+                  .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).margin({ top: 4 })
               }
             }
             .alignItems(HorizontalAlign.Start).width('100%')
@@ -898,7 +912,7 @@ struct Index {
                 .color('#eeeef5').backgroundColor('#191920')
                 .borderRadius(12)
               Text('用其他验证器扫描此码可直接导入').fontSize(12)
-                .fontColor('rgba(238,238,245,0.4)').textAlign(TextAlign.Center)
+                .fontColor('rgba(238,238,245,0.65)').textAlign(TextAlign.Center)
             }.alignItems(HorizontalAlign.Center).width('100%')
           }
           .alignItems(HorizontalAlign.Center)
@@ -940,12 +954,12 @@ struct Index {
           }
           .width(18).height(18).borderRadius(4)
           .backgroundColor(this.privacyAgreed ? this.accentColor : Color.Transparent)
-          .border({ width: 1.5, color: this.privacyAgreed ? this.accentColor : this.c('rgba(238,238,245,0.3)', '#D5CEC4') })
+          .border({ width: 1.5, color: this.privacyAgreed ? this.accentColor : this.c('rgba(238,238,245,0.60)', '#9C9088') })
           .onClick(() => { this.privacyAgreed = !this.privacyAgreed; })
 
           Text() {
             Span('我已阅读并同意 ')
-              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
             Span('《隐私保护协议》')
               .fontSize(12).fontColor(this.accentColor).fontWeight(500)
               .onClick(() => {
@@ -961,7 +975,7 @@ struct Index {
                 });
               })
             Span('，授权获取头像、昵称信息')
-              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           }
           .flexGrow(1)
         }
@@ -971,11 +985,11 @@ struct Index {
         Button('鸿蒙账号登录')
           .width('100%').height(50).borderRadius(15)
           .backgroundColor(this.privacyAgreed ? this.accentColor : this.c('#191920', '#F5F0EA'))
-          .fontColor(this.privacyAgreed ? '#fff' : this.c('rgba(238,238,245,0.3)', '#A99E93'))
+          .fontColor(this.privacyAgreed ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650)
           .onClick(() => { this.doHarmonyLogin(); })
         Text('将使用设备上的鸿蒙账号信息')
-          .fontSize(11).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93')).textAlign(TextAlign.Center)
+          .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
       }
       .padding({ left: 20, right: 20, top: 20 })
       .flexGrow(1)
@@ -999,7 +1013,7 @@ struct Index {
           .borderRadius(12).border({ width: 1, color: 'rgba(59,130,246,0.2)' })
 
         Column({ space: 6 }) {
-          Text('加密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+          Text('加密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextInput({ text: this.backupPw, placeholder: '设置备份密码' })
             .type(InputType.Password)
             .onChange((v) => { this.backupPw = v; })
@@ -1009,7 +1023,7 @@ struct Index {
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Column({ space: 6 }) {
-          Text('确认密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+          Text('确认密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextInput({ text: this.backupPw2, placeholder: '再次输入密码' })
             .type(InputType.Password)
             .onChange((v) => { this.backupPw2 = v; })
@@ -1023,12 +1037,12 @@ struct Index {
           Text('两次密码不一致').fontSize(12).fontColor('#f87171')
         }
         Text(`将备份 ${this.tokens.length} 个账号`)
-          .fontSize(13).fontColor(this.c('rgba(238,238,245,0.35)', '#8B7E74'))
+          .fontSize(13).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
 
         Button('加密备份并下载')
           .width('100%').height(50).borderRadius(15)
           .backgroundColor(this.backupPw && this.backupPw === this.backupPw2 ? this.accentColor : this.c('#191920', '#F5F0EA'))
-          .fontColor(this.backupPw && this.backupPw === this.backupPw2 ? '#fff' : this.c('rgba(238,238,245,0.3)', '#A99E93'))
+          .fontColor(this.backupPw && this.backupPw === this.backupPw2 ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doBackup())
       }
@@ -1049,21 +1063,21 @@ struct Index {
         Button(this.importFileName ? `已选择: ${this.importFileName}` : '选择备份文件')
           .width('100%').height(44).borderRadius(12)
           .backgroundColor(this.importFileName ? this.accentColor + '22' : this.c('#191920', '#F5F0EA'))
-          .fontColor(this.importFileName ? this.accentColor : this.c('rgba(238,238,245,0.4)', '#8B7E74'))
+          .fontColor(this.importFileName ? this.accentColor : this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           .fontSize(13).fontWeight(500)
           .onClick(() => this.selectImportFile())
 
         Column({ space: 6 }) {
-          Text('备份内容（粘贴加密文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+          Text('备份内容（粘贴加密文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextArea({ text: this.importText, placeholder: '粘贴备份内容…' })
             .onChange((v) => { this.importText = v; })
             .height(120).backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
-            .placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93')).fontSize(12).fontFamily('monospace')
+            .placeholderColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).fontSize(12).fontFamily('monospace')
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Column({ space: 6 }) {
-          Text('解密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+          Text('解密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextInput({ text: this.importPw, placeholder: '输入备份时设置的密码' })
             .type(InputType.Password)
             .onChange((v) => { this.importPw = v; })
@@ -1075,7 +1089,7 @@ struct Index {
         Button('解密并导入')
           .width('100%').height(50).borderRadius(15)
           .backgroundColor(this.importText && this.importPw ? this.accentColor : this.c('#191920', '#F5F0EA'))
-          .fontColor(this.importText && this.importPw ? '#fff' : this.c('rgba(238,238,245,0.3)', '#A99E93'))
+          .fontColor(this.importText && this.importPw ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doImport())
       }
@@ -1124,7 +1138,7 @@ struct Index {
               .border({ width: 3, color: this.currentTheme.name === t.name ? '#fff' : Color.Transparent })
               .shadow({ radius: this.currentTheme.name === t.name ? 18 : 12, color: t.color + (this.currentTheme.name === t.name ? '' : '55'), offsetX: 0, offsetY: 4 })
               Text(t.name).fontSize(10).textAlign(TextAlign.Center).lineHeight(13)
-                .fontColor(this.currentTheme.name === t.name ? this.c('#eeeef5', '#2C1810') : this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+                .fontColor(this.currentTheme.name === t.name ? this.c('#eeeef5', '#2C1810') : this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                 .fontWeight(this.currentTheme.name === t.name ? 600 : 400)
             }.alignItems(HorizontalAlign.Center)
             .onClick(() => this.selectTheme(idx))
@@ -1190,7 +1204,7 @@ struct Index {
             Column({ space: 0 }) {
               Text('✨').fontSize(32).margin({ bottom: 8 })
               Text('您已是会员').fontSize(17).fontWeight(700).fontColor(this.accentColor)
-              Text('永久有效').fontSize(12).fontColor(this.c('rgba(238,238,245,0.5)', '#8B7E74')).margin({ top: 4 })
+              Text('永久有效').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).margin({ top: 4 })
             }
             .width('100%').padding(20).alignItems(HorizontalAlign.Center)
             .backgroundColor(this.accentColor + '1e')
@@ -1198,7 +1212,7 @@ struct Index {
             .borderRadius(14)
 
             Column({ space: 6 }) {
-              Text('绑定账号').fontSize(10).fontColor('rgba(238,238,245,0.4)')
+              Text('绑定账号').fontSize(10).fontColor('rgba(238,238,245,0.65)')
               Row({ space: 10 }) {
                 Stack() {
                   Text(this.boundAccount.length > 0 ? this.boundAccount[0].toUpperCase() : '鸿')
@@ -1208,7 +1222,7 @@ struct Index {
                 .backgroundColor(this.accentColor)
                 Column({ space: 2 }) {
                   Text(this.boundAccount || '鸿蒙用户').fontSize(13).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
-                  Text('换设备登录同账号可恢复会员').fontSize(11).fontColor(this.c('rgba(238,238,245,0.35)', '#A99E93'))
+                  Text('换设备登录同账号可恢复会员').fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                 }.alignItems(HorizontalAlign.Start)
               }.width('100%')
             }
@@ -1224,7 +1238,7 @@ struct Index {
               Text('👑').fontSize(40)
               Row({ space: 4 }) {
                 Text('¥19.90').fontSize(28).fontWeight(800).fontColor(this.c('#eeeef5', '#2C1810'))
-                Text('永久会员').fontSize(12).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74'))
+                Text('永久会员').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }
               .alignItems(VerticalAlign.Bottom)
               .margin({ top: 6 })
@@ -1240,7 +1254,7 @@ struct Index {
               // ── 状态 1：未登录 ──────────────────────────────────────
               Column({ space: 4 }) {
                 Text('购买会员需要先登录').fontSize(12).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43'))
-                Text('会员将绑定至您的鸿蒙账号').fontSize(11).fontColor(this.c('rgba(238,238,245,0.35)', '#8B7E74'))
+                Text('会员将绑定至您的鸿蒙账号').fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }
               .width('100%').padding(10).alignItems(HorizontalAlign.Center)
               .backgroundColor(this.accentColor + '1a')
@@ -1265,7 +1279,7 @@ struct Index {
               Row({ space: 8 }) {
                 Text('👤').fontSize(16)
                 Column({ space: 2 }) {
-                  Text('购买后绑定至').fontSize(10).fontColor(this.c('rgba(238,238,245,0.5)', '#8B7E74'))
+                  Text('购买后绑定至').fontSize(10).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                   Text(this.userName || '鸿蒙用户').fontSize(12).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
                 }.alignItems(HorizontalAlign.Start)
               }
@@ -1282,7 +1296,7 @@ struct Index {
                   .onClick(() => { this.buyMembership(); })
 
                 Row() {
-                  Text('换机后可用同一账号 ').fontSize(11).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+                  Text('换机后可用同一账号 ').fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
                   Text('恢复购买')
                     .fontSize(11).fontColor(this.accentColor)
                     .onClick(() => { this.restorePurchase(); })
@@ -1318,7 +1332,7 @@ struct Index {
 
         Text(this.userName).fontSize(20).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(700)
         if (this.userPhone) {
-          Text(this.userPhone).fontSize(14).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74'))
+          Text(this.userPhone).fontSize(14).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
         }
         if (this.harmonyLogin) {
           Text('鸿蒙账号登录').fontSize(12).fontColor(this.accentColor).fontWeight(500)
@@ -1337,7 +1351,9 @@ struct Index {
             this.userName = '';
             this.userPhone = '';
             this.userAvatar = '';
-            saveLogin(false, '', '', '', false); // Clear login state
+            this.userOpenId = '';
+            this.harmonyLogin = false;
+            saveLogin(false, '', '', '', false);
             this.toast('已退出登录');
           })
       }
@@ -1419,7 +1435,9 @@ struct Index {
               this.userName = '';
               this.userPhone = '';
               this.userAvatar = '';
-              saveLogin(false, '', '', '', false); // Clear login state
+              this.userOpenId = '';
+              this.harmonyLogin = false;
+              saveLogin(false, '', '', '', false);
               this.toast('已退出登录');
             },
             onBackupTap: () => {
@@ -1437,6 +1455,7 @@ struct Index {
             onToggleMode: () => {
               this.isDark = !this.isDark;
               saveThemeMode(this.isDark);
+              this.updateStatusBarColor();
             },
             onAboutTap: () => { this.showAbout = true; },
             isDark: this.isDark,

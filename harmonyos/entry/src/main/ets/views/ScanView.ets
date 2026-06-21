@@ -143,7 +143,7 @@ export struct ScanView {
           Text(label)
             .flexGrow(1).textAlign(TextAlign.Center)
             .fontSize(12).fontWeight(this.tab === idx ? 650 : 400)
-            .fontColor(this.tab === idx ? '#fff' : this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+            .fontColor(this.tab === idx ? '#fff' : this.c('rgba(238,238,245,0.65)', '#6B5B50'))
             .backgroundColor(this.tab === idx ? this.accentColor : Color.Transparent)
             .borderRadius(10).padding({ top: 8, bottom: 8 })
             .onClick(() => { this.tab = idx; })
@@ -217,12 +217,12 @@ export struct ScanView {
           .width('100%').constraintSize({ maxWidth: 310 }).aspectRatio(1).alignContent(Alignment.TopStart)
 
           Text(this.scanning ? '正在识别二维码…' : '点击下方按钮扫描二维码')
-            .fontSize(13).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74')).textAlign(TextAlign.Center)
+            .fontSize(13).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).textAlign(TextAlign.Center)
 
           Button(this.scanning ? '识别中…' : '扫描二维码')
             .width('100%').height(50).borderRadius(15)
             .backgroundColor(this.scanning ? 'rgba(255,255,255,0.07)' : this.accentColor)
-            .fontColor(this.scanning ? this.c('rgba(238,238,245,0.4)', '#A99E93') : '#fff')
+            .fontColor(this.scanning ? this.c('rgba(238,238,245,0.65)', '#6B5B50') : '#fff')
             .fontSize(15).fontWeight(650)
             .enabled(!this.scanning)
             .onClick(() => this.doScan(false))
@@ -249,38 +249,38 @@ export struct ScanView {
           Column({ space: 14 }) {
             Column({ space: 6 }) {
               Row({ space: 4 }) {
-                Text('品牌名称').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74')).fontWeight(500)
+                Text('品牌名称').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).fontWeight(500)
                 Text('*').fontSize(12).fontColor(this.accentColor)
               }
               TextInput({ text: this.brand, placeholder: '如 Google、Microsoft…' })
                 .onChange((v) => { this.brand = v; this.brandErr = ''; })
                 .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
                 .border({ width: 1, color: this.brandErr ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
-                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
+                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
                 .height(44).padding({ left: 14, right: 14 })
               if (this.brandErr) { Text(this.brandErr).fontSize(11).fontColor('#f87171') }
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
-              Text('账号信息').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74')).fontWeight(500)
+              Text('账号信息').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).fontWeight(500)
               TextInput({ text: this.account, placeholder: '邮箱、用户名等' })
                 .onChange((v) => { this.account = v; })
                 .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
                 .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
-                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
+                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
                 .height(44).padding({ left: 14, right: 14 })
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
               Row({ space: 4 }) {
-                Text('Secret Key').fontSize(12).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74')).fontWeight(500)
+                Text('Secret Key').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).fontWeight(500)
                 Text('*').fontSize(12).fontColor(this.accentColor)
               }
               TextInput({ text: this.secret, placeholder: 'Base32 密钥，如 JBSWY3DP…' })
                 .onChange((v) => { this.secret = v; this.secretErr = ''; })
                 .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810')).fontFamily('monospace')
                 .border({ width: 1, color: this.secretErr ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
-                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.25)', '#A99E93'))
+                .borderRadius(12).placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
                 .height(44).padding({ left: 14, right: 14 })
               if (this.secretErr) { Text(this.secretErr).fontSize(11).fontColor('#f87171') }
             }.alignItems(HorizontalAlign.Start).width('100%')
@@ -290,9 +290,9 @@ export struct ScanView {
                 Logo({ brand: this.brand, logoSize: 36, isDark: this.isDark, accentColor: this.accentColor })
                 Column({ space: 2 }) {
                   Text(this.brand).fontSize(14).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(600)
-                  if (this.account) { Text(this.account).fontSize(12).fontColor(this.c('rgba(238,238,245,0.4)', '#8B7E74')) }
+                  if (this.account) { Text(this.account).fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')) }
                 }.alignItems(HorizontalAlign.Start).flexGrow(1)
-                Text('预览').fontSize(11).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+                Text('预览').fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
               }
               .padding(12).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(12)
               .border({ width: 1, color: this.c('rgba(255,255,255,0.06)', '#E8E2D9') }).width('100%')

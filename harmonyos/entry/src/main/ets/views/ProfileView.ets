@@ -55,7 +55,7 @@ export struct ProfileView {
               Text(this.userName || '华为用户')
                 .fontSize(20).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(700).maxLines(1)
               Text(this.harmonyLogin ? '华为账号 · 星枢令' : (this.userPhone || '玄钥账号'))
-                .fontSize(13).fontColor(this.c('rgba(238,238,245,0.45)', '#8B7E74'))
+                .fontSize(13).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               // Status chips
               Row({ space: 6 }) {
                 Text('已登录')
@@ -117,9 +117,9 @@ export struct ProfileView {
               Column({ space: 2 }) {
                 Text(this.isMember ? '会员特权' : '开通会员').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
                 Text(this.isMember ? '永久会员 · 永久有效' : '¥19.90 · 永久会员，无限制添加')
-                  .fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                  .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
-              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
             .border({ width: { left: this.isMember ? 3 : 0 }, color: { left: this.isMember ? this.accentColor : Color.Transparent } })
@@ -136,12 +136,12 @@ export struct ProfileView {
               Column({ space: 2 }) {
                 Text('备份数据').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
                 Text(this.isMember ? '加密备份到云端' : '会员专属')
-                  .fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                  .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
-              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .opacity(this.loggedIn ? 1 : 0.38)
+            .opacity(this.loggedIn ? 1 : 0.65)
             .onClick(() => { if (this.loggedIn) this.onBackupTap(); })
             Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
           }
@@ -155,12 +155,12 @@ export struct ProfileView {
               Column({ space: 2 }) {
                 Text('导入备份').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
                 Text(this.isMember ? '从云端恢复' : '会员专属')
-                  .fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                  .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
-              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .opacity(this.loggedIn ? 1 : 0.38)
+            .opacity(this.loggedIn ? 1 : 0.65)
             .onClick(() => { if (this.loggedIn) this.onImportTap(); })
             Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
           }
@@ -173,9 +173,9 @@ export struct ProfileView {
                 .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('皮肤主题').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                Text(this.themeName).fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                Text(this.themeName).fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
-              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
             .onClick(() => this.onThemeTap())
@@ -190,9 +190,9 @@ export struct ProfileView {
                 .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('显示模式').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                Text(this.isDark ? '深色' : '浅色').fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                Text(this.isDark ? '深色' : '浅色').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
-              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
             .onClick(() => this.onToggleMode())
@@ -207,9 +207,9 @@ export struct ProfileView {
                 .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('意见与建议').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                Text('向我们反馈问题或建议').fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                Text('向我们反馈问题或建议').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
-              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
             .onClick(() => this.onFeedbackTap())
@@ -224,9 +224,9 @@ export struct ProfileView {
                 .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('关于我们').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                Text('版本号·法律·联系方式').fontSize(12).fontColor(this.c('rgba(238,238,245,0.38)', '#8B7E74'))
+                Text('版本号·法律·联系方式').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
-              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.3)', '#A99E93'))
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
             .onClick(() => this.onAboutTap())
