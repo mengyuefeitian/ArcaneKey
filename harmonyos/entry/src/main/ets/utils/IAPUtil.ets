@@ -29,7 +29,7 @@ export async function launchPurchase(context: common.UIAbilityContext): Promise<
     return token;
   } catch (error) {
     console.error('IAP launchPurchase failed:', error);
-    throw new Error('购买失败，请稍后重试');
+    throw error as Error;
   }
 }
 
@@ -49,7 +49,7 @@ export async function acknowledgePurchase(
     });
   } catch (error) {
     console.error('IAP acknowledgePurchase failed:', error);
-    throw new Error('确认购买失败');
+    throw error as Error;
   }
 }
 
