@@ -75,6 +75,7 @@ struct Index {
 
   // ── HarmonyOS Login Flag ────────────────────────────────────────
   @State harmonyLogin: boolean = false;
+  @State userOpenId: string = '';
   @State showAccountInfo: boolean = false;
   @State privacyAgreed: boolean = false;
 
@@ -224,6 +225,7 @@ struct Index {
         this.userPhone = loginData.userPhone;
         this.userAvatar = loginData.userAvatar;
         this.harmonyLogin = loginData.harmonyLogin;
+        this.userOpenId = loginData.userOpenId || '';
       }
 
       const saved = await loadTokens();
@@ -361,33 +363,32 @@ struct Index {
       const controller = new authentication.AuthenticationController(ctx);
       const resp = await controller.executeRequest(request);
       const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
+      const openId = cred?.openID || '';
+      console.info(`[ArcaneKey] HuaweiID auth success: openID=${openId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
       this.loggedIn = true;
+      this.userOpenId = openId;
       this.userName = cred?.nickName || '华为用户';
       this.userAvatar = cred?.avatarUri || '';
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-
-      // Save login state to preferences
-      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true);
-
-      this.toast(`登录成功`);
+      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, openId);
+      this.toast('登录成功');
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
         this.toast('已取消登录');
       } else {
+        console.warn(`[ArcaneKey] HuaweiID auth error: code=${code}`);
         this.loggedIn = true;
+        this.userOpenId = '';
         this.userName = '华为用户';
         this.userAvatar = '';
         this.harmonyLogin = true;
         this.showLogin = false;
         this.privacyAgreed = false;
-
-        // Save login state to preferences
-        await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true);
-
-        this.toast(`登录成功`);
+        await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, '');
+        this.toast('登录成功');
       }
     }
   }
@@ -564,7 +565,7 @@ struct Index {
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
       const tokenResult = await launchPurchase(ctx);
-      await saveMember(true, this.userName);
+      await saveMember(true, this.userName, this.userOpenId);
       this.isMember = true;
       this.boundAccount = this.userName;
       this.toast('开通成功');
@@ -594,7 +595,7 @@ struct Index {
       const result = await restoreOwnedPurchases(ctx);
       if (result) {
         const bound = this.userName || this.boundAccount;
-        await saveMember(true, bound);
+        await saveMember(true, bound, this.userOpenId);
         this.isMember = true;
         this.boundAccount = bound;
         this.toast('会员已恢复');
@@ -1350,7 +1351,9 @@ struct Index {
             this.userName = '';
             this.userPhone = '';
             this.userAvatar = '';
-            saveLogin(false, '', '', '', false); // Clear login state
+            this.userOpenId = '';
+            this.harmonyLogin = false;
+            saveLogin(false, '', '', '', false);
             this.toast('已退出登录');
           })
       }
@@ -1432,7 +1435,9 @@ struct Index {
               this.userName = '';
               this.userPhone = '';
               this.userAvatar = '';
-              saveLogin(false, '', '', '', false); // Clear login state
+              this.userOpenId = '';
+              this.harmonyLogin = false;
+              saveLogin(false, '', '', '', false);
               this.toast('已退出登录');
             },
             onBackupTap: () => {

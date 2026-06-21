@@ -64,24 +64,29 @@ export async function saveTheme(theme: ThemeItem): Promise<void> {
 export interface MemberData {
   isMember: boolean;
   boundAccount: string;
+  boundOpenId: string;
 }
 
 export async function loadMember(): Promise<MemberData> {
   try {
-    if (!pref) return { isMember: false, boundAccount: '' };
+    if (!pref) return { isMember: false, boundAccount: '', boundOpenId: '' };
     const val = await pref.get(MEMBER_KEY, '');
     if (val && typeof val === 'string' && val !== '') {
       const raw = JSON.parse(val as string) as Record<string, string | boolean>;
-      return { isMember: !!raw.isMember, boundAccount: (raw.boundAccount as string) || '' };
+      return {
+        isMember: !!raw.isMember,
+        boundAccount: (raw.boundAccount as string) || '',
+        boundOpenId: (raw.boundOpenId as string) || '',
+      };
     }
   } catch (_) {}
-  return { isMember: false, boundAccount: '' };
+  return { isMember: false, boundAccount: '', boundOpenId: '' };
 }
 
-export async function saveMember(isMember: boolean, boundAccount: string): Promise<void> {
+export async function saveMember(isMember: boolean, boundAccount: string, boundOpenId?: string): Promise<void> {
   try {
     if (!pref) return;
-    await pref.put(MEMBER_KEY, JSON.stringify({ isMember, boundAccount }));
+    await pref.put(MEMBER_KEY, JSON.stringify({ isMember, boundAccount, boundOpenId: boundOpenId || '' }));
     await pref.flush();
   } catch (_) {}
 }
@@ -92,23 +97,32 @@ export interface LoginData {
   userPhone: string;
   userAvatar: string;
   harmonyLogin: boolean;
+  userOpenId: string;
 }
 
 export async function loadLogin(): Promise<LoginData> {
   try {
-    if (!pref) return { loggedIn: false, userName: '', userPhone: '', userAvatar: '', harmonyLogin: false };
+    if (!pref) return { loggedIn: false, userName: '', userPhone: '', userAvatar: '', harmonyLogin: false, userOpenId: '' };
     const val = await pref.get(LOGIN_KEY, '');
     if (val && typeof val === 'string' && val !== '') {
-      return JSON.parse(val as string) as LoginData;
+      const raw = JSON.parse(val as string) as Record<string, string | boolean>;
+      return {
+        loggedIn: !!raw.loggedIn,
+        userName: (raw.userName as string) || '',
+        userPhone: (raw.userPhone as string) || '',
+        userAvatar: (raw.userAvatar as string) || '',
+        harmonyLogin: !!raw.harmonyLogin,
+        userOpenId: (raw.userOpenId as string) || '',
+      };
     }
   } catch (_) {}
-  return { loggedIn: false, userName: '', userPhone: '', userAvatar: '', harmonyLogin: false };
+  return { loggedIn: false, userName: '', userPhone: '', userAvatar: '', harmonyLogin: false, userOpenId: '' };
 }
 
-export async function saveLogin(loggedIn: boolean, userName: string, userPhone: string, userAvatar: string, harmonyLogin: boolean): Promise<void> {
+export async function saveLogin(loggedIn: boolean, userName: string, userPhone: string, userAvatar: string, harmonyLogin: boolean, userOpenId?: string): Promise<void> {
   try {
     if (!pref) return;
-    await pref.put(LOGIN_KEY, JSON.stringify({ loggedIn, userName, userPhone, userAvatar, harmonyLogin }));
+    await pref.put(LOGIN_KEY, JSON.stringify({ loggedIn, userName, userPhone, userAvatar, harmonyLogin, userOpenId: userOpenId || '' }));
     await pref.flush();
   } catch (_) {}
 }
