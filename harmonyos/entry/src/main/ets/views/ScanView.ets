@@ -34,8 +34,6 @@ export struct ScanView {
     this.scanErrMsg = '';
     this.scanning = false;
 
-    // Auto-launch camera when scan view opens
-    setTimeout(() => { this.doScan(false); }, 200);
   }
 
   private validate(): boolean {
