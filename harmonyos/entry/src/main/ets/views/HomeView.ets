@@ -115,7 +115,7 @@ export struct HomeView {
             })
           }
           .swipeAction({ end: () => { this.DeleteAction(tok) } })
-        }, (tok: Token) => tok.id)
+        }, (tok: Token) => tok.id + '_' + tok.brand + '_' + tok.account)
         ListItem() { Column().height(96) }
       }
       .width('100%')

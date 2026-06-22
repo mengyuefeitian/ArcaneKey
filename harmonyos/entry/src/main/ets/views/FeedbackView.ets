@@ -8,6 +8,7 @@ export struct FeedbackView {
   @State content: string = '';
   @State contact: string = '';
   @State sending: boolean = false;
+  @State submitError: string = '';
   onClose: () => void = () => {};
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
 
@@ -81,6 +82,10 @@ export struct FeedbackView {
             .fontSize(15).fontWeight(650)
             .onClick(() => this.submitFeedback())
 
+          if (this.submitError) {
+            Text(this.submitError)
+              .fontSize(12).fontColor('#f87171').textAlign(TextAlign.Center).width('100%')
+          }
           Text('您的反馈将发送至开发团队，我们认真对待每一条建议')
             .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
         }
@@ -102,14 +107,17 @@ export struct FeedbackView {
       if (!ctx) throw new Error('no context');
       const uri = `mailto:mengyuefeitian@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       const want: Want = {
-        action: 'ohos.want.action.sendData',
+        action: 'ohos.want.action.viewData',
         uri: uri,
+        entities: ['entity.system.browsable'],
       };
       await ctx.startAbility(want);
       this.sending = false;
+      this.submitError = '';
       this.onClose();
     } catch (_) {
       this.sending = false;
+      this.submitError = '发送失败，请确认已安装邮件应用';
     }
   }
 }
