@@ -14,7 +14,7 @@ export struct FeedbackView {
 
   private isValidEmail(email: string): boolean {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+    return re.test(email.trim());
   }
 
   get canSubmit(): boolean {
@@ -66,7 +66,7 @@ export struct FeedbackView {
           // Contact
           Text('联系邮箱 *').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextInput({ text: this.contact, placeholder: '请输入邮箱地址' })
-            .onChange((v: string) => { this.contact = v; })
+            .onChange((v: string) => { this.contact = v.trim(); })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
             .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
             .border({ width: 1, color: (this.contact.length > 0 && !this.isValidEmail(this.contact)) ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
