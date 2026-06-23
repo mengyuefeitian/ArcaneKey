@@ -1,4 +1,5 @@
 import { common, Want } from '@kit.AbilityKit';
+import promptAction from '@ohos.promptAction';
 
 @Component
 export struct FeedbackView {
@@ -8,7 +9,6 @@ export struct FeedbackView {
   @State content: string = '';
   @State contact: string = '';
   @State sending: boolean = false;
-  @State submitError: string = '';
   onClose: () => void = () => {};
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
 
@@ -68,6 +68,7 @@ export struct FeedbackView {
           TextInput({ text: this.contact, placeholder: '请输入邮箱地址' })
             .onChange((v: string) => { this.contact = v; })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
             .border({ width: 1, color: (this.contact.length > 0 && !this.isValidEmail(this.contact)) ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
             .borderRadius(12).height(44).type(InputType.Email)
           if (this.contact.length > 0 && !this.isValidEmail(this.contact)) {
@@ -82,10 +83,6 @@ export struct FeedbackView {
             .fontSize(15).fontWeight(650)
             .onClick(() => this.submitFeedback())
 
-          if (this.submitError) {
-            Text(this.submitError)
-              .fontSize(12).fontColor('#f87171').textAlign(TextAlign.Center).width('100%')
-          }
           Text('您的反馈将发送至开发团队，我们认真对待每一条建议')
             .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
         }
@@ -96,21 +93,26 @@ export struct FeedbackView {
     .padding({ top: 44 }) // Add status bar safe area padding
   }
 
+  private toast(msg: string): void {
+    promptAction.showToast({ message: msg, duration: 2500 });
+  }
+
   private async submitFeedback(): Promise<void> {
     if (!this.canSubmit) {
       if (this.content.length < 10) {
-        this.submitError = '请至少输入10个字的反馈内容';
+        this.toast('请至少输入10个字的反馈内容');
       } else if (this.content.length > 500) {
-        this.submitError = '反馈内容不能超过500字';
-      } else if (!this.isValidEmail(this.contact)) {
-        this.submitError = this.contact.length === 0 ? '请输入联系邮箱' : '邮箱格式不正确';
+        this.toast('反馈内容不能超过500字');
+      } else if (this.contact.length === 0) {
+        this.toast('请输入联系邮箱');
+      } else {
+        this.toast('邮箱格式不正确');
       }
       return;
     }
     this.sending = true;
     const subject = `[星枢令][${this.type}]`;
-    let body = `反馈类型: ${this.type}\n\n反馈内容:\n${this.content}\n\n`;
-    if (this.contact) body += `联系方式: ${this.contact}\n`;
+    let body = `反馈类型: ${this.type}\n\n反馈内容:\n${this.content}\n\n联系方式: ${this.contact}\n`;
     try {
       const ctx = AppStorage.get<common.UIAbilityContext>('context');
       if (!ctx) throw new Error('no context');
@@ -122,11 +124,10 @@ export struct FeedbackView {
       };
       await ctx.startAbility(want);
       this.sending = false;
-      this.submitError = '';
       this.onClose();
     } catch (_) {
       this.sending = false;
-      this.submitError = '发送失败，请确认已安装邮件应用';
+      this.toast('无法打开邮件客户端，请手动发送至 mengyuefeitian@gmail.com');
     }
   }
 }
