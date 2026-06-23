@@ -97,7 +97,16 @@ export struct FeedbackView {
   }
 
   private async submitFeedback(): Promise<void> {
-    if (!this.canSubmit) return;
+    if (!this.canSubmit) {
+      if (this.content.length < 10) {
+        this.submitError = '请至少输入10个字的反馈内容';
+      } else if (this.content.length > 500) {
+        this.submitError = '反馈内容不能超过500字';
+      } else if (!this.isValidEmail(this.contact)) {
+        this.submitError = this.contact.length === 0 ? '请输入联系邮箱' : '邮箱格式不正确';
+      }
+      return;
+    }
     this.sending = true;
     const subject = `[星枢令][${this.type}]`;
     let body = `反馈类型: ${this.type}\n\n反馈内容:\n${this.content}\n\n`;
