@@ -44,3 +44,28 @@ harmonyos/local.properties
 *.hap
 *.app
 *.har
+
+# ====== 敏感信息保护 ======
+
+# 云函数代码（包含 SMTP 授权码等敏感信息）
+# 云端已部署，本地仅作留档，不应推送
+harmonyos/cloudfunctions/
+miniprogram/cloudfunctions/
+
+# AGC 配置文件（包含 client_secret, api_key 等）
+# 如需版本管理，应使用模板文件如 agconnect-services.json.example
+**/agconnect-services.json
+
+# 授权码、密钥文件
+*.secret
+*.key
+*credentials*
+*password*
+*apikey*
+*secret*
+**/secrets.*
+
+# 环境变量文件
+.env
+.env.*
+*.env
