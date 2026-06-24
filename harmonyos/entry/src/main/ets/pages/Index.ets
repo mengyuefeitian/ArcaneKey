@@ -6,7 +6,7 @@ import { picker } from '@kit.CoreFileKit';
 import { preferences } from '@kit.ArkData';
 import fs from '@ohos.file.fs';
 import util from '@ohos.util';
-import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
+import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase } from '../utils/IAPUtil';
@@ -18,6 +18,7 @@ import { ProfileView } from '../views/ProfileView';
 import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
+import { initCloudDB, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
   newFileNames: string[];
@@ -31,7 +32,7 @@ interface IapError {
 @Component
 struct Index {
   // ── Core State ──────────────────────────────────────────────────
-  @State tokens: Token[] = [];
+  @State tokens: SyncToken[] = [];
   @State otpMap: Record<string, OtpPair> = {};
   @State timeLeft_: number = 30;
   @State currentTab: number = 0;

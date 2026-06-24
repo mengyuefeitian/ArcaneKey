@@ -59,7 +59,7 @@ export async function addToken(token: SyncToken): Promise<void> {
   } catch (e) {
     const err: Error = e as Error;
     console.error('[SyncUtil] addToken failed:', err.message);
-    throw e;
+    throw new Error(err.message);
   }
 }
 
@@ -87,7 +87,7 @@ export async function updateToken(token: SyncToken): Promise<void> {
   } catch (e) {
     const err: Error = e as Error;
     console.error('[SyncUtil] updateToken failed:', err.message);
-    throw e;
+    throw new Error(err.message);
   }
 }
 
@@ -115,7 +115,7 @@ export async function softDeleteToken(id: string): Promise<void> {
   } catch (e) {
     const err: Error = e as Error;
     console.error('[SyncUtil] softDeleteToken failed:', err.message);
-    throw e;
+    throw new Error(err.message);
   }
 }
 
@@ -143,7 +143,7 @@ export async function restoreToken(id: string): Promise<void> {
   } catch (e) {
     const err: Error = e as Error;
     console.error('[SyncUtil] restoreToken failed:', err.message);
-    throw e;
+    throw new Error(err.message);
   }
 }
 
