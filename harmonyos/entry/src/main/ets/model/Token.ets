@@ -5,6 +5,14 @@ export interface Token {
   secret: string;
 }
 
+export interface SyncToken extends Token {
+  is_deleted?: boolean;      // 软删除标记
+  deleted_at?: string;       // 删除时间（ISO 8601）
+  _id?: string;              // 云数据库文档 ID
+  _openid?: string;          // 用户 OpenID（云端填充）
+  timestamp?: string;        // 最后更新时间（ISO 8601）
+}
+
 export interface OtpPair {
   current: string;
   next: string;
