@@ -151,9 +151,16 @@ export async function restoreToken(id: string): Promise<void> {
  * 执行云端同步（通过云函数）
  * 拉取云端数据并与本地合并
  * @param localTokens 本地口令列表
+ * @param isMember 是否为会员（非会员不执行同步）
  * @returns 同步后的口令列表
  */
-export async function sync(localTokens: SyncToken[]): Promise<SyncToken[]> {
+export async function sync(localTokens: SyncToken[], isMember: boolean): Promise<SyncToken[]> {
+  // 会员专享：非会员不执行任何同步操作
+  if (!isMember) {
+    console.log('[SyncUtil] sync skipped: not a member');
+    return localTokens;
+  }
+
   try {
     console.log('[SyncUtil] sync started, local tokens:', localTokens.length);
 
