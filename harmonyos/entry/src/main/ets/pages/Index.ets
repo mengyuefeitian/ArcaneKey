@@ -203,6 +203,7 @@ struct Index {
     clearTimeout(this.toastTimer);
     if (this.cdTimer !== -1) clearInterval(this.cdTimer);
     if (this.autoSyncTimer !== -1) clearInterval(this.autoSyncTimer);
+    stopAutoSync();
   }
 
   // ── Data ────────────────────────────────────────────────────────
@@ -240,7 +241,11 @@ struct Index {
       this.boundAccount = member.boundAccount;
       this.refreshOtp();
       if (this.isMember) {
-        this.cloudRestore();
+        // 初始化云数据库
+        await initCloudDB();
+        console.log('[Index] cloud DB initialized');
+
+        await this.cloudRestore();
         this.startAutoSync();
       } else {
         try {
@@ -298,7 +303,10 @@ struct Index {
     this.refreshOtp();
     this.currentTab = 0;
     this.toast(`已添加 ${brand}`);
-    if (this.isMember) this.cloudBackup();
+    if (this.isMember) {
+      // Fire-and-forget async backup
+      this.cloudBackup();
+    }
   }
 
   private saveEdit(): void {
@@ -332,7 +340,10 @@ struct Index {
     this.showDeleteConfirm = false;
     this.deleteTarget = {} as Token;
     this.toast('已删除');
-    if (this.isMember && !localOnly) this.cloudDelete(id);
+    if (this.isMember && !localOnly) {
+      // Fire-and-forget async cloud delete
+      this.cloudDelete(id);
+    }
   }
 
   private requestDeleteToken(tok: Token): void {
@@ -499,62 +510,80 @@ struct Index {
   }
 
   // ── Cloud Backup & Sync (Cloud Kit) ─────────────────────────────
-  private cloudBackup(): void {
+  private async cloudBackup(): Promise<void> {
     if (!this.isMember) return;
-    try {
-      const ctx = AppStorage.get<common.UIAbilityContext>('context');
-      if (!ctx) return;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = JSON.stringify(this.tokens);
-      prefs.putSync('tokens_backup', data);
-      prefs.flushSync();
-    } catch (_) {}
-  }
 
-  private cloudRestore(): void {
-    if (!this.isMember) return;
     try {
-      const ctx = AppStorage.get<common.UIAbilityContext>('context');
-      if (!ctx) return;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = prefs.getSync('tokens_backup', '') as string;
-      if (data) {
-        const cloudTokens = JSON.parse(data) as Token[];
-        if (!Array.isArray(cloudTokens)) return;
-        const ids = new Set(this.tokens.map((t: Token) => t.id));
-        const newTokens = cloudTokens.filter((t: Token) => this.isValidToken(t as object) && !ids.has(t.id));
-        if (newTokens.length > 0) {
-          this.tokens = this.tokens.concat(newTokens);
-          saveTokens(this.tokens);
-          this.refreshOtp();
-          this.toast(`从云端同步 ${newTokens.length} 个账号`);
+      console.log('[Index] cloudBackup started, tokens:', this.tokens.length);
+
+      // 同步所有本地口令到云端
+      for (const token of this.tokens) {
+        if (token._id) {
+          // 已有云端 ID，更新
+          await updateToken(token);
+        } else {
+          // 没有云端 ID，新增
+          await addToken(token);
         }
       }
-    } catch (_) {}
+
+      console.log('[Index] cloudBackup completed');
+    } catch (e) {
+      console.error('[Index] cloudBackup failed:', (e as Error).message);
+      this.toast('云端备份失败，请检查网络');
+    }
   }
 
-  private cloudDelete(tokenId: string): void {
+  private async cloudRestore(): Promise<void> {
     if (!this.isMember) return;
+
     try {
-      const ctx = AppStorage.get<common.UIAbilityContext>('context');
-      if (!ctx) return;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = prefs.getSync('tokens_backup', '') as string;
-      if (data) {
-        const parsed = JSON.parse(data) as object;
-        if (!Array.isArray(parsed)) return;
-        const tokens = (parsed as Token[]).filter((t: Token) => t.id !== tokenId);
-        prefs.putSync('tokens_backup', JSON.stringify(tokens));
-        prefs.flushSync();
+      console.log('[Index] cloudRestore started');
+
+      // 执行双向同步
+      const merged = await sync(this.tokens, this.isMember);
+
+      // 检查是否有新数据
+      if (merged.length > this.tokens.length) {
+        const oldLen = this.tokens.length;
+        this.tokens = merged;
+        await saveTokens(this.tokens);
+        this.refreshOtp();
+
+        const newCount = merged.length - oldLen;
+        this.toast(`从云端同步 ${newCount} 个账号`);
+        console.log('[Index] cloudRestore completed, new tokens:', newCount);
+      } else {
+        console.log('[Index] cloudRestore completed, no new tokens');
       }
-    } catch (_) {}
+    } catch (e) {
+      console.error('[Index] cloudRestore failed:', (e as Error).message);
+      // 同步失败不提示，不影响用户使用
+    }
+  }
+
+  private async cloudDelete(tokenId: string): Promise<void> {
+    if (!this.isMember) return;
+
+    try {
+      console.log('[Index] cloudDelete started, token:', tokenId);
+
+      // 软删除云端口令
+      await softDeleteToken(tokenId);
+
+      console.log('[Index] cloudDelete completed');
+    } catch (e) {
+      console.error('[Index] cloudDelete failed:', (e as Error).message);
+      // 删除失败不提示，本地已删除
+    }
   }
 
   private startAutoSync(): void {
     if (!this.isMember) return;
-    this.autoSyncTimer = setInterval(() => {
-      this.cloudBackup();
-    }, 60 * 60 * 1000) as number;
+
+    startAutoSync(async () => {
+      await this.cloudBackup();
+    });
   }
 
   private async buyMembership(): Promise<void> {
