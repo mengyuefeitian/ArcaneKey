@@ -512,8 +512,114 @@ struct Index {
     this.importFileName = '';
   }
 
+  private importFromUris(uris: string[]): void {
+    const existingSecrets = new Set(this.tokens.map((t: Token) => t.secret.toUpperCase()));
+    const toAdd: Token[] = [];
+    let ts = Date.now();
+    for (const uri of uris) {
+      if (!uri.startsWith('otpauth://totp/')) continue;
+      try {
+        const qIdx = uri.indexOf('?');
+        const q = qIdx >= 0 ? uri.substring(qIdx + 1) : '';
+        const params: Record<string, string> = {};
+        if (q) {
+          q.split('&').forEach((p: string) => {
+            const eqIdx = p.indexOf('=');
+            if (eqIdx > 0) {
+              params[p.substring(0, eqIdx)] = decodeURIComponent(p.substring(eqIdx + 1));
+            }
+          });
+        }
+        const labelEnd = qIdx >= 0 ? qIdx : uri.length;
+        const labelRaw = uri.substring('otpauth://totp/'.length, labelEnd);
+        const label = decodeURIComponent(labelRaw);
+        const colonIdx = label.indexOf(':');
+        const b = params['issuer'] || (colonIdx >= 0 ? label.substring(0, colonIdx) : label);
+        const a = colonIdx >= 0 ? label.substring(colonIdx + 1) : (params['issuer'] ? label : '');
+        const s = (params['secret'] ?? '').toUpperCase();
+        if (!s || existingSecrets.has(s)) continue;
+        const tok: Token = { id: (ts++).toString(), brand: b.trim() || '未知', account: a.trim(), secret: s };
+        toAdd.push(tok);
+        existingSecrets.add(s);
+      } catch (_) {}
+    }
+    if (toAdd.length === 0) { this.toast('未找到有效的账号数据'); return; }
+    const room = !this.isMember ? Math.max(0, FREE_TOKEN_LIMIT - this.tokens.length) : toAdd.length;
+    const actualToAdd = toAdd.slice(0, room);
+    const skipped = toAdd.length - actualToAdd.length;
+    if (actualToAdd.length === 0) { this.toast(`已达到免费上限 ${FREE_TOKEN_LIMIT} 个，请开通会员`); return; }
+    this.tokens = this.tokens.concat(actualToAdd);
+    saveTokens(this.tokens);
+    this.refreshOtp();
+    this.resetImportState();
+    this.showImport = false;
+    if (skipped > 0) {
+      this.toast(`成功导入 ${actualToAdd.length} 个，${skipped} 个超出免费上限`);
+    } else {
+      this.toast(`成功导入 ${actualToAdd.length} 个账号`);
+    }
+    if (this.isMember && this.loggedIn) { this.cloudBackup(); }
+  }
+
   private doImport(): void {
-    if (!this.importText || !this.importPw) return;
+    if (!this.importText) return;
+    const text = this.importText.trim();
+
+    // Try JSON with uri fields (e.g. Proton Authenticator export, Google Authenticator export)
+    if (text.startsWith('{') || text.startsWith('[')) {
+      try {
+        const parsed: object = JSON.parse(text) as object;
+        const uris: string[] = [];
+
+        // Determine the array of items to process
+        let items: object[] = [];
+        if (Array.isArray(parsed)) {
+          items = parsed as object[];
+        } else {
+          // Root is a wrapper object — check common array fields
+          const root = parsed as Record<string, object>;
+          if (Array.isArray(root['entries'])) {
+            items = root['entries'] as object[];
+          } else if (Array.isArray(root['data'])) {
+            items = root['data'] as object[];
+          } else if (Array.isArray(root['accounts'])) {
+            items = root['accounts'] as object[];
+          } else if (Array.isArray(root['tokens'])) {
+            items = root['tokens'] as object[];
+          } else {
+            items = [parsed];
+          }
+        }
+
+        for (const item of items) {
+          // Direct uri field (Google Authenticator, Aegis, etc.)
+          const directUri = (item as Record<string, string>)['uri'];
+          if (typeof directUri === 'string' && directUri.startsWith('otpauth://')) {
+            uris.push(directUri);
+            continue;
+          }
+          // Nested uri in 'content' (Proton Authenticator format)
+          const content = (item as Record<string, object>)['content'];
+          if (content && typeof content === 'object') {
+            const nestedUri = (content as Record<string, string>)['uri'];
+            if (typeof nestedUri === 'string' && nestedUri.startsWith('otpauth://')) {
+              uris.push(nestedUri);
+            }
+          }
+        }
+
+        if (uris.length > 0) { this.importFromUris(uris); return; }
+      } catch (_) {}
+    }
+
+    // Try plaintext otpauth:// URI lines
+    const lines = text.split('\n')
+      .map((l: string) => l.trim())
+      .filter((l: string) => l.startsWith('otpauth://totp/'));
+    if (lines.length > 0) { this.importFromUris(lines); return; }
+
+    // Encrypted backup — requires password
+    if (!this.importPw) { this.toast('请输入解密密码，或粘贴 otpauth:// 格式的内容'); return; }
     try {
       const data = decryptData(this.importText, this.importPw) as Token[];
       if (!Array.isArray(data)) throw new Error('invalid');
@@ -1077,9 +1183,9 @@ struct Index {
       this.modalHeader('备份数据', () => { this.showBackup = false; })
       Column({ space: 14 }) {
         Text('ℹ️ 备份文件将使用您设置的密码加密。请牢记密码，忘记密码将无法恢复数据。')
-          .fontSize(13).fontColor('rgba(238,238,245,0.65)').lineHeight(22)
-          .padding(14).backgroundColor('rgba(59,130,246,0.1)')
-          .borderRadius(12).border({ width: 1, color: 'rgba(59,130,246,0.2)' })
+          .fontSize(13).fontColor(this.c('rgba(238,238,245,0.65)', '#5C4F43')).lineHeight(22)
+          .padding(14).backgroundColor(this.c('rgba(59,130,246,0.10)', 'rgba(59,130,246,0.08)'))
+          .borderRadius(12).border({ width: 1, color: this.c('rgba(59,130,246,0.2)', 'rgba(59,130,246,0.25)') })
 
         Column({ space: 6 }) {
           Text('加密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
@@ -1087,6 +1193,7 @@ struct Index {
             .type(InputType.Password)
             .onChange((v) => { this.backupPw = v; })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
@@ -1097,6 +1204,7 @@ struct Index {
             .type(InputType.Password)
             .onChange((v) => { this.backupPw2 = v; })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
             .border({ width: 1, color: this.backupPw && this.backupPw2 && this.backupPw !== this.backupPw2 ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
             .borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
@@ -1137,8 +1245,8 @@ struct Index {
           .onClick(() => this.selectImportFile())
 
         Column({ space: 6 }) {
-          Text('备份内容（粘贴加密文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
-          TextArea({ text: this.importText, placeholder: '粘贴备份内容…' })
+          Text('备份内容（粘贴加密或 OTP 文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          TextArea({ text: this.importText, placeholder: '粘贴备份内容，或粘贴 otpauth:// 格式内容…' })
             .onChange((v) => { this.importText = v; })
             .height(120).backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
@@ -1146,19 +1254,20 @@ struct Index {
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Column({ space: 6 }) {
-          Text('解密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
-          TextInput({ text: this.importPw, placeholder: '输入备份时设置的密码' })
+          Text('解密密码（加密备份时才需要填写）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          TextInput({ text: this.importPw, placeholder: '输入备份时设置的密码（明文内容无需填写）' })
             .type(InputType.Password)
             .onChange((v) => { this.importPw = v; })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
 
-        Button('解密并导入')
+        Button('导入')
           .width('100%').height(50).borderRadius(15)
-          .backgroundColor(this.importText && this.importPw ? this.accentColor : this.c('#191920', '#F5F0EA'))
-          .fontColor(this.importText && this.importPw ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+          .backgroundColor(this.importText ? this.accentColor : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.importText ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doImport())
       }
@@ -1313,7 +1422,7 @@ struct Index {
               .margin({ top: 6 })
             }
             .alignItems(HorizontalAlign.Center)
-            .padding({ top: 24, bottom: 20 })
+            .padding({ top: 10, bottom: 10 })
             .width('100%')
 
             // ── 共用：权益列表 ────────────────────────────────────────
@@ -1376,9 +1485,10 @@ struct Index {
           }
 
         }
-        .padding({ left: 20, right: 20, bottom: 40 })
+        .padding({ left: 20, right: 20, top: 8, bottom: 40 })
+        .width('100%').constraintSize({ minHeight: '100%' })
       }
-      .scrollBar(BarState.Off).flexGrow(1)
+      .scrollBar(BarState.Off).layoutWeight(1)
     }
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })

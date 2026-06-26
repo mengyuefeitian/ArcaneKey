@@ -59,11 +59,11 @@ export struct ProfileView {
               // Status chips
               Row({ space: 6 }) {
                 Text('已登录')
-                  .fontSize(11).fontColor(this.accentColor)
+                  .fontSize(11).fontColor(this.c('#fff', '#2C1810'))
                   .padding({ left: 8, right: 8, top: 3, bottom: 3 })
                   .borderRadius(8)
-                  .backgroundColor(this.accentColor + '18')
-                  .border({ width: 1, color: this.accentColor + '44' })
+                  .backgroundColor(this.c(this.accentColor + '55', this.accentColor + '25'))
+                  .border({ width: 1, color: this.c(this.accentColor + '77', this.accentColor + '55') })
                 if (this.isMember) {
                   Text('会员')
                     .fontSize(11).fontColor('#C8993A')
@@ -76,10 +76,12 @@ export struct ProfileView {
             }.alignItems(HorizontalAlign.Start).flexGrow(1)
             // Logout button — circular, right side
             Button({ type: ButtonType.Normal }) {
-              Text('→').fontSize(16).fontColor('#fff').fontWeight(700)
+              Image($r('app.media.quit'))
+                .width(18).height(18)
+                .fillColor('#fff')
             }
             .width(38).height(38).borderRadius(19)
-            .backgroundColor('rgba(210,55,55,0.80)')
+            .backgroundColor(this.accentColor)
             .onClick(() => this.onLogout())
           }
           .alignItems(VerticalAlign.Center)
@@ -122,7 +124,6 @@ export struct ProfileView {
               Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .border({ width: { left: this.isMember ? 3 : 0 }, color: { left: this.isMember ? this.accentColor : Color.Transparent } })
             .onClick(() => this.onMembershipTap())
             Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
           }

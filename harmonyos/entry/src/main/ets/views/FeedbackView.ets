@@ -203,7 +203,7 @@ export struct FeedbackView {
       Scroll() {
         Column({ space: 16 }) {
           // Feedback type
-          Text('反馈类型').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          Text('反馈类型').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).width('100%')
           Row({ space: 8 }) {
             Button('需求').flexGrow(1)
               .backgroundColor(this.type === '需求' ? this.accentColor + '18' : Color.Transparent)
@@ -258,11 +258,12 @@ export struct FeedbackView {
           Text('您的反馈将发送至开发团队，我们认真对待每一条建议')
             .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
         }
-        .padding({ left: 20, right: 20, top: 4, bottom: 40 })
-      }.scrollBar(BarState.Off).flexGrow(1)
+        .padding({ left: 20, right: 20, top: 12, bottom: 40 })
+        .width('100%').constraintSize({ minHeight: '100%' })
+      }.scrollBar(BarState.Off).layoutWeight(1)
     }
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
-    .padding({ top: 44 }) // Add status bar safe area padding
+    .padding({ top: 44 })
   }
 
   private toast(msg: string): void {
