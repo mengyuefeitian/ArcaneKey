@@ -1,11 +1,15 @@
 # OS
 .DS_Store
+**/.DS_Store
 Thumbs.db
 
 # Private keys & credentials
 private.*.key
+private.wx*.key
 *.pem
 *.p12
+*.cer
+*.p7b
 secrets/
 .env
 .env.*
@@ -14,6 +18,56 @@ secrets/
 .planning/
 miniprogram/.planning/
 
-# WeChat DevTools generated
+# WeChat Mini Program
 miniprogram/node_modules/
+miniprogram/miniprogram_npm/
 node_modules/
+
+# HarmonyOS 构建缓存 (DevEco Studio / hvigor)
+harmonyos/.hvigor/
+harmonyos/entry/build/
+harmonyos/build/
+
+# ohpm 依赖包
+harmonyos/oh_modules/
+harmonyos/*/oh_modules/
+
+# IDE 生成文件 (DevEco Studio)
+harmonyos/.idea/.deveco/
+harmonyos/.idea/workspace.xml
+harmonyos/.idea/usage.statistics.xml
+
+# 本地签名配置（含密钥路径和密码，勿提交）
+harmonyos/local.properties
+harmonyos/build-profile.json5
+harmonyos/build-profile.*.json5
+
+# 构建产物
+*.hap
+*.app
+*.har
+
+# ====== 敏感信息保护 ======
+
+# 云函数代码（包含 SMTP 授权码等敏感信息）
+# 云端已部署，本地仅作留档，不应推送
+harmonyos/cloudfunctions/
+miniprogram/cloudfunctions/
+
+# AGC 配置文件（包含 client_secret, api_key 等）
+# 如需版本管理，应使用模板文件如 agconnect-services.json.example
+**/agconnect-services.json
+
+# 授权码、密钥文件
+*.secret
+*.key
+*credentials*
+*password*
+*apikey*
+*secret*
+**/secrets.*
+
+# 环境变量文件
+.env
+.env.*
+*.env
