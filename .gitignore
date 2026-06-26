@@ -37,8 +37,10 @@ harmonyos/.idea/.deveco/
 harmonyos/.idea/workspace.xml
 harmonyos/.idea/usage.statistics.xml
 
-# 本地签名配置
+# 本地签名配置（含密钥路径和密码，勿提交）
 harmonyos/local.properties
+harmonyos/build-profile.json5
+harmonyos/build-profile.*.json5
 
 # 构建产物
 *.hap
