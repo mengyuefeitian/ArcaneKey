@@ -1,94 +1,6 @@
 import { pasteboard } from '@kit.BasicServicesKit';
 import promptAction from '@ohos.promptAction';
-import socket from '@ohos.net.socket';
-import { util } from '@kit.ArkTS';
 import cloud from '@hw-agconnect/cloud';
-
-// SMTP 会话步骤（ArkTS 严格模式：命名接口，不允许匿名对象类型）
-interface SmtpStep {
-  expect: string;
-  send: string | null;
-}
-
-// 检查是否为 SMTP 终止行（三位数字 + 空格，不是连字符的多行中间行）
-function isSmtpTerminal(line: string): boolean {
-  return line.length >= 4 &&
-    line.charCodeAt(0) >= 48 && line.charCodeAt(0) <= 57 &&
-    line.charCodeAt(1) >= 48 && line.charCodeAt(1) <= 57 &&
-    line.charCodeAt(2) >= 48 && line.charCodeAt(2) <= 57 &&
-    line.charCodeAt(3) === 32;
-}
-
-// Base64 编码（用于 SMTP 身份验证和 MIME 头）
-function b64Encode(s: string): string {
-  const enc = new util.TextEncoder();
-  const b64 = new util.Base64Helper();
-  return b64.encodeToStringSync(enc.encodeInto(s));
-}
-
-// SmtpSession 把 TLSSocket 事件回调与 Promise 连接起来，绕开 ArkTS 禁止嵌套函数的限制
-class SmtpSession {
-  private tls: socket.TLSSocket = socket.constructTLSSocketInstance();
-  private dec: util.TextDecoder = new util.TextDecoder('utf-8');
-  private buf: string = '';
-  private idx: number = 0;
-  private done: boolean = false;
-  private tid: number = 0;
-  private steps: SmtpStep[] = [];
-  private okCb: () => void = () => {};
-  private errCb: (e: Error) => void = (_e: Error) => {};
-
-  init(steps: SmtpStep[], ok: () => void, err: (e: Error) => void): void {
-    this.steps = steps;
-    this.okCb = ok;
-    this.errCb = err;
-  }
-
-  run(): void {
-    this.tid = setTimeout(() => { this.finish(new Error('SMTP timeout')); }, 30000);
-    this.tls.on('error', (e: Error) => { this.finish(e); });
-    this.tls.on('message', (info: socket.SocketMessageInfo) => { this.onData(info); });
-    this.tls.connect({
-      address: { address: 'smtp.163.com', port: 465, family: 1 },
-      secureOptions: {}
-    }).catch((e: Error) => { this.finish(e); });
-  }
-
-  private finish(err?: Error): void {
-    if (this.done) return;
-    this.done = true;
-    clearTimeout(this.tid);
-    this.tls.close().catch((_e: Error) => {});
-    if (err) {
-      this.errCb(err);
-    } else {
-      this.okCb();
-    }
-  }
-
-  private onData(info: socket.SocketMessageInfo): void {
-    this.buf += this.dec.decodeWithStream(new Uint8Array(info.message));
-    const lines = this.buf.split('\r\n').filter(l => l.length > 0);
-    if (lines.length === 0) return;
-    const last = lines[lines.length - 1];
-    if (!isSmtpTerminal(last)) return;
-
-    const code = last.substring(0, 3);
-    const step = this.steps[this.idx];
-    if (code !== step.expect) {
-      this.finish(new Error(`SMTP: expected ${step.expect}, got ${code}`));
-      return;
-    }
-    this.buf = '';
-    this.idx++;
-    const toSend: string | null = step.send;
-    if (toSend === null) {
-      this.finish();
-      return;
-    }
-    this.tls.send(toSend).catch((e: Error) => { this.finish(e); });
-  }
-}
 
 // 云函数返回值接口
 interface CloudResultValue {
@@ -111,45 +23,6 @@ async function cloudSendFeedback(type: string, content: string, contactInfo: str
   const errMsg: string = (value !== null && value !== undefined && value.error !== undefined)
     ? value.error : '云函数返回失败';
   throw new Error(errMsg);
-}
-
-// 直连 163 SMTP（port 465 隐式 TLS），绕开 AGC HTTP 触发器鉴权问题
-function smtpSendFeedback(type: string, content: string, contactInfo: string): Promise<void> {
-  const SMTP_USER = '17817560527@163.com';
-  const SMTP_PASS = 'ZBp4QZTBsu3UZY55';
-  const SMTP_TO = 'mengyuefeitian@gmail.com';
-
-  const subj = `[星枢令][${type}]`;
-  const bodyText =
-    `星枢令意见反馈（鸿蒙端）\n\n类型：${type}\n联系方式：${contactInfo}\n\n反馈内容：\n${content}\n`;
-  const msgHeaders = [
-    `From: =?UTF-8?B?${b64Encode('星枢令反馈')}?= <${SMTP_USER}>`,
-    `To: <${SMTP_TO}>`,
-    `Subject: =?UTF-8?B?${b64Encode(subj)}?=`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: base64'
-  ].join('\r\n');
-  const emailData = msgHeaders + '\r\n\r\n' + b64Encode(bodyText);
-
-  const steps: SmtpStep[] = [
-    { expect: '220', send: 'EHLO arcanekey\r\n' },
-    { expect: '250', send: 'AUTH LOGIN\r\n' },
-    { expect: '334', send: b64Encode(SMTP_USER) + '\r\n' },
-    { expect: '334', send: b64Encode(SMTP_PASS) + '\r\n' },
-    { expect: '235', send: `MAIL FROM:<${SMTP_USER}>\r\n` },
-    { expect: '250', send: `RCPT TO:<${SMTP_TO}>\r\n` },
-    { expect: '250', send: 'DATA\r\n' },
-    { expect: '354', send: emailData + '\r\n.\r\n' },
-    { expect: '250', send: 'QUIT\r\n' },
-    { expect: '221', send: null }
-  ];
-
-  return new Promise<void>((resolve, reject) => {
-    const session = new SmtpSession();
-    session.init(steps, resolve, (e: Error) => { reject(e); });
-    session.run();
-  });
 }
 
 @Component
@@ -203,7 +76,7 @@ export struct FeedbackView {
       Scroll() {
         Column({ space: 16 }) {
           // Feedback type
-          Text('反馈类型').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          Text('反馈类型').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).width('100%')
           Row({ space: 8 }) {
             Button('需求').flexGrow(1)
               .backgroundColor(this.type === '需求' ? this.accentColor + '18' : Color.Transparent)
@@ -258,11 +131,12 @@ export struct FeedbackView {
           Text('您的反馈将发送至开发团队，我们认真对待每一条建议')
             .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
         }
-        .padding({ left: 20, right: 20, top: 4, bottom: 40 })
-      }.scrollBar(BarState.Off).flexGrow(1)
+        .padding({ left: 20, right: 20, top: 12, bottom: 40 })
+        .width('100%').constraintSize({ minHeight: '100%' })
+      }.scrollBar(BarState.Off).layoutWeight(1)
     }
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
-    .padding({ top: 44 }) // Add status bar safe area padding
+    .padding({ top: 44 })
   }
 
   private toast(msg: string): void {
@@ -293,28 +167,15 @@ export struct FeedbackView {
     this.sending = true;
     const cleanContact = this.normalizeEmail(this.contact);
     try {
-      // 优先尝试云函数（生产环境推荐）
       await cloudSendFeedback(this.type, this.content, cleanContact);
       this.sending = false;
       this.content = '';
       this.contact = '';
       this.toast('反馈已提交，感谢您的建议！');
       this.onClose();
-    } catch (cloudErr) {
-      // 云函数失败，回退到直接 SMTP（开发环境/离线场景）
-      const errObj: Error = cloudErr as Error;
-      console.info('云函数调用失败，回退 SMTP: ' + (errObj.message));
-      try {
-        await smtpSendFeedback(this.type, this.content, cleanContact);
-        this.sending = false;
-        this.content = '';
-        this.contact = '';
-        this.toast('反馈已提交，感谢您的建议！');
-        this.onClose();
-      } catch (_smtpErr) {
-        this.sending = false;
-        await this.fallbackCopy(cleanContact);
-      }
+    } catch (_cloudErr) {
+      this.sending = false;
+      await this.fallbackCopy(cleanContact);
     }
   }
 

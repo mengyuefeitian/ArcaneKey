@@ -6,7 +6,7 @@ import { picker } from '@kit.CoreFileKit';
 import { preferences } from '@kit.ArkData';
 import fs from '@ohos.file.fs';
 import util from '@ohos.util';
-import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
+import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase } from '../utils/IAPUtil';
@@ -18,6 +18,7 @@ import { ProfileView } from '../views/ProfileView';
 import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
+import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
   newFileNames: string[];
@@ -31,7 +32,7 @@ interface IapError {
 @Component
 struct Index {
   // ── Core State ──────────────────────────────────────────────────
-  @State tokens: Token[] = [];
+  @State tokens: SyncToken[] = [];
   @State otpMap: Record<string, OtpPair> = {};
   @State timeLeft_: number = 30;
   @State currentTab: number = 0;
@@ -117,6 +118,10 @@ struct Index {
   private toastTimer: number = -1;
   private cdTimer: number = -1;
   private autoSyncTimer: number = -1;
+  private pendingCloudInit: boolean = false;
+
+  // Mirrors AppStorage['agcAuthReady']; @Watch fires when EntryAbility finishes signInAnonymously()
+  @StorageProp('agcAuthReady') @Watch('onAgcAuthReady') agcAuthReady_: boolean = false;
 
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
 
@@ -130,6 +135,26 @@ struct Index {
         navigationBarContentColor: this.isDark ? '#FFFFFF' : '#000000'
       });
     } catch (_) {}
+  }
+
+  // Called by @Watch when agcAuthReady_ flips true in AppStorage
+  private onAgcAuthReady(propName: string): void {
+    console.log('[Index] agcAuthReady changed:', propName, this.agcAuthReady_);
+    if (!this.agcAuthReady_ || !this.pendingCloudInit) return;
+    this.pendingCloudInit = false;
+    this.doCloudInit();
+  }
+
+  private doCloudInit(): void {
+    initCloudDB().then(() => {
+      setCloudUserId(this.userOpenId);
+      console.log('[Index] cloud DB initialized (deferred after AGC auth)');
+      return this.cloudRestore();
+    }).then(() => {
+      this.startAutoSync();
+    }).catch((e: Error) => {
+      console.error('[Index] deferred cloud init failed:', e.message);
+    });
   }
 
   // ── Back navigation ─────────────────────────────────────────────
@@ -202,6 +227,7 @@ struct Index {
     clearTimeout(this.toastTimer);
     if (this.cdTimer !== -1) clearInterval(this.cdTimer);
     if (this.autoSyncTimer !== -1) clearInterval(this.autoSyncTimer);
+    stopAutoSync();
   }
 
   // ── Data ────────────────────────────────────────────────────────
@@ -237,10 +263,21 @@ struct Index {
       const member: MemberData = await loadMember();
       this.isMember = member.isMember;
       this.boundAccount = member.boundAccount;
+
       this.refreshOtp();
       if (this.isMember) {
-        this.cloudRestore();
-        this.startAutoSync();
+        if (this.agcAuthReady_) {
+          // AGC auth already finished — initialize cloud DB now
+          await initCloudDB();
+          setCloudUserId(this.userOpenId);
+          console.log('[Index] cloud DB initialized');
+          await this.cloudRestore();
+          this.startAutoSync();
+        } else {
+          // AGC auth still in flight — onAgcAuthReady() will handle init once it completes
+          this.pendingCloudInit = true;
+          console.log('[Index] cloud DB init deferred (waiting for AGC auth)');
+        }
       } else {
         try {
           const restored = await restoreOwnedPurchases(ctx);
@@ -297,7 +334,10 @@ struct Index {
     this.refreshOtp();
     this.currentTab = 0;
     this.toast(`已添加 ${brand}`);
-    if (this.isMember) this.cloudBackup();
+    if (this.isMember) {
+      // Fire-and-forget async backup
+      this.cloudBackup();
+    }
   }
 
   private saveEdit(): void {
@@ -311,6 +351,12 @@ struct Index {
     });
     saveTokens(this.tokens);
     this.refreshOtp();
+    if (this.isMember && this.loggedIn) {
+      const updated = this.tokens.find((t: Token): boolean => t.id === id);
+      if (updated) {
+        updateToken(updated).catch((e: Error) => console.error('[Index] cloudUpdate failed:', e.message));
+      }
+    }
     this.editToken = {} as Token;
     this.toast('已保存');
   }
@@ -324,6 +370,7 @@ struct Index {
   private deleteToken(localOnly: boolean): void {
     if (!this.deleteTarget.id && !this.editToken.id) return;
     const id = this.deleteTarget.id || this.editToken.id;
+    const tokenToDelete = this.tokens.find((t: Token): boolean => t.id === id);
     this.tokens = this.tokens.filter((t: Token) => t.id !== id);
     saveTokens(this.tokens);
     this.refreshOtp();
@@ -331,7 +378,9 @@ struct Index {
     this.showDeleteConfirm = false;
     this.deleteTarget = {} as Token;
     this.toast('已删除');
-    if (this.isMember && !localOnly) this.cloudDelete(id);
+    if (this.isMember && this.loggedIn && !localOnly && tokenToDelete) {
+      this.cloudDelete(tokenToDelete);
+    }
   }
 
   private requestDeleteToken(tok: Token): void {
@@ -367,6 +416,7 @@ struct Index {
       console.info(`[ArcaneKey] HuaweiID auth success: openID=${openId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
       this.loggedIn = true;
       this.userOpenId = openId;
+      setCloudUserId(openId);
       this.userName = cred?.nickName || '华为用户';
       this.userAvatar = cred?.avatarUri || '';
       this.harmonyLogin = true;
@@ -374,6 +424,10 @@ struct Index {
       this.privacyAgreed = false;
       await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, openId);
       this.toast('登录成功');
+      if (this.isMember) {
+        await this.cloudRestore();
+        this.startAutoSync();
+      }
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
@@ -389,6 +443,10 @@ struct Index {
         this.privacyAgreed = false;
         await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, '');
         this.toast('登录成功');
+        if (this.isMember) {
+          await this.cloudRestore();
+          this.startAutoSync();
+        }
       }
     }
   }
@@ -451,8 +509,114 @@ struct Index {
     this.importFileName = '';
   }
 
+  private importFromUris(uris: string[]): void {
+    const existingSecrets = new Set(this.tokens.map((t: Token) => t.secret.toUpperCase()));
+    const toAdd: Token[] = [];
+    let ts = Date.now();
+    for (const uri of uris) {
+      if (!uri.startsWith('otpauth://totp/')) continue;
+      try {
+        const qIdx = uri.indexOf('?');
+        const q = qIdx >= 0 ? uri.substring(qIdx + 1) : '';
+        const params: Record<string, string> = {};
+        if (q) {
+          q.split('&').forEach((p: string) => {
+            const eqIdx = p.indexOf('=');
+            if (eqIdx > 0) {
+              params[p.substring(0, eqIdx)] = decodeURIComponent(p.substring(eqIdx + 1));
+            }
+          });
+        }
+        const labelEnd = qIdx >= 0 ? qIdx : uri.length;
+        const labelRaw = uri.substring('otpauth://totp/'.length, labelEnd);
+        const label = decodeURIComponent(labelRaw);
+        const colonIdx = label.indexOf(':');
+        const b = params['issuer'] || (colonIdx >= 0 ? label.substring(0, colonIdx) : label);
+        const a = colonIdx >= 0 ? label.substring(colonIdx + 1) : (params['issuer'] ? label : '');
+        const s = (params['secret'] ?? '').toUpperCase();
+        if (!s || existingSecrets.has(s)) continue;
+        const tok: Token = { id: (ts++).toString(), brand: b.trim() || '未知', account: a.trim(), secret: s };
+        toAdd.push(tok);
+        existingSecrets.add(s);
+      } catch (_) {}
+    }
+    if (toAdd.length === 0) { this.toast('未找到有效的账号数据'); return; }
+    const room = !this.isMember ? Math.max(0, FREE_TOKEN_LIMIT - this.tokens.length) : toAdd.length;
+    const actualToAdd = toAdd.slice(0, room);
+    const skipped = toAdd.length - actualToAdd.length;
+    if (actualToAdd.length === 0) { this.toast(`已达到免费上限 ${FREE_TOKEN_LIMIT} 个，请开通会员`); return; }
+    this.tokens = this.tokens.concat(actualToAdd);
+    saveTokens(this.tokens);
+    this.refreshOtp();
+    this.resetImportState();
+    this.showImport = false;
+    if (skipped > 0) {
+      this.toast(`成功导入 ${actualToAdd.length} 个，${skipped} 个超出免费上限`);
+    } else {
+      this.toast(`成功导入 ${actualToAdd.length} 个账号`);
+    }
+    if (this.isMember && this.loggedIn) { this.cloudBackup(); }
+  }
+
   private doImport(): void {
-    if (!this.importText || !this.importPw) return;
+    if (!this.importText) return;
+    const text = this.importText.trim();
+
+    // Try JSON with uri fields (e.g. Proton Authenticator export, Google Authenticator export)
+    if (text.startsWith('{') || text.startsWith('[')) {
+      try {
+        const parsed: object = JSON.parse(text) as object;
+        const uris: string[] = [];
+
+        // Determine the array of items to process
+        let items: object[] = [];
+        if (Array.isArray(parsed)) {
+          items = parsed as object[];
+        } else {
+          // Root is a wrapper object — check common array fields
+          const root = parsed as Record<string, object>;
+          if (Array.isArray(root['entries'])) {
+            items = root['entries'] as object[];
+          } else if (Array.isArray(root['data'])) {
+            items = root['data'] as object[];
+          } else if (Array.isArray(root['accounts'])) {
+            items = root['accounts'] as object[];
+          } else if (Array.isArray(root['tokens'])) {
+            items = root['tokens'] as object[];
+          } else {
+            items = [parsed];
+          }
+        }
+
+        for (const item of items) {
+          // Direct uri field (Google Authenticator, Aegis, etc.)
+          const directUri = (item as Record<string, string>)['uri'];
+          if (typeof directUri === 'string' && directUri.startsWith('otpauth://')) {
+            uris.push(directUri);
+            continue;
+          }
+          // Nested uri in 'content' (Proton Authenticator format)
+          const content = (item as Record<string, object>)['content'];
+          if (content && typeof content === 'object') {
+            const nestedUri = (content as Record<string, string>)['uri'];
+            if (typeof nestedUri === 'string' && nestedUri.startsWith('otpauth://')) {
+              uris.push(nestedUri);
+            }
+          }
+        }
+
+        if (uris.length > 0) { this.importFromUris(uris); return; }
+      } catch (_) {}
+    }
+
+    // Try plaintext otpauth:// URI lines
+    const lines = text.split('\n')
+      .map((l: string) => l.trim())
+      .filter((l: string) => l.startsWith('otpauth://totp/'));
+    if (lines.length > 0) { this.importFromUris(lines); return; }
+
+    // Encrypted backup — requires password
+    if (!this.importPw) { this.toast('请输入解密密码，或粘贴 otpauth:// 格式的内容'); return; }
     try {
       const data = decryptData(this.importText, this.importPw) as Token[];
       if (!Array.isArray(data)) throw new Error('invalid');
@@ -498,62 +662,70 @@ struct Index {
   }
 
   // ── Cloud Backup & Sync (Cloud Kit) ─────────────────────────────
-  private cloudBackup(): void {
+  private async cloudBackup(): Promise<void> {
     if (!this.isMember) return;
+
     try {
-      const ctx = AppStorage.get<common.UIAbilityContext>('context');
-      if (!ctx) return;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = JSON.stringify(this.tokens);
-      prefs.putSync('tokens_backup', data);
-      prefs.flushSync();
-    } catch (_) {}
+      console.log('[Index] cloudBackup started, tokens:', this.tokens.length);
+
+      // upsert 全部本地口令到云端（主键 secret 匹配则更新，否则新增）
+      for (const token of this.tokens) {
+        await addToken(token);
+      }
+
+      console.log('[Index] cloudBackup completed');
+    } catch (e) {
+      console.error('[Index] cloudBackup failed:', (e as Error).message);
+      this.toast('云端备份失败，请检查网络');
+    }
   }
 
-  private cloudRestore(): void {
+  private async cloudRestore(): Promise<void> {
     if (!this.isMember) return;
+
     try {
-      const ctx = AppStorage.get<common.UIAbilityContext>('context');
-      if (!ctx) return;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = prefs.getSync('tokens_backup', '') as string;
-      if (data) {
-        const cloudTokens = JSON.parse(data) as Token[];
-        if (!Array.isArray(cloudTokens)) return;
-        const ids = new Set(this.tokens.map((t: Token) => t.id));
-        const newTokens = cloudTokens.filter((t: Token) => this.isValidToken(t as object) && !ids.has(t.id));
-        if (newTokens.length > 0) {
-          this.tokens = this.tokens.concat(newTokens);
-          saveTokens(this.tokens);
-          this.refreshOtp();
-          this.toast(`从云端同步 ${newTokens.length} 个账号`);
-        }
+      console.log('[Index] cloudRestore started');
+
+      // 执行双向同步
+      const merged = await sync(this.tokens, this.isMember);
+
+      // 检查是否有新数据
+      if (merged.length > this.tokens.length) {
+        const oldLen = this.tokens.length;
+        this.tokens = merged;
+        await saveTokens(this.tokens);
+        this.refreshOtp();
+
+        const newCount = merged.length - oldLen;
+        this.toast(`从云端同步 ${newCount} 个账号`);
+        console.log('[Index] cloudRestore completed, new tokens:', newCount);
+      } else {
+        console.log('[Index] cloudRestore completed, no new tokens');
       }
-    } catch (_) {}
+    } catch (e) {
+      console.error('[Index] cloudRestore failed:', (e as Error).message);
+      // 同步失败不提示，不影响用户使用
+    }
   }
 
-  private cloudDelete(tokenId: string): void {
+  private async cloudDelete(token: SyncToken): Promise<void> {
     if (!this.isMember) return;
+
     try {
-      const ctx = AppStorage.get<common.UIAbilityContext>('context');
-      if (!ctx) return;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = prefs.getSync('tokens_backup', '') as string;
-      if (data) {
-        const parsed = JSON.parse(data) as object;
-        if (!Array.isArray(parsed)) return;
-        const tokens = (parsed as Token[]).filter((t: Token) => t.id !== tokenId);
-        prefs.putSync('tokens_backup', JSON.stringify(tokens));
-        prefs.flushSync();
-      }
-    } catch (_) {}
+      console.log('[Index] cloudDelete started, token:', token.id);
+      await softDeleteToken(token);
+      console.log('[Index] cloudDelete completed');
+    } catch (e) {
+      console.error('[Index] cloudDelete failed:', (e as Error).message);
+    }
   }
 
   private startAutoSync(): void {
     if (!this.isMember) return;
-    this.autoSyncTimer = setInterval(() => {
-      this.cloudBackup();
-    }, 60 * 60 * 1000) as number;
+
+    startAutoSync(async () => {
+      await this.cloudBackup();
+    });
   }
 
   private async buyMembership(): Promise<void> {
@@ -1008,9 +1180,9 @@ struct Index {
       this.modalHeader('备份数据', () => { this.showBackup = false; })
       Column({ space: 14 }) {
         Text('ℹ️ 备份文件将使用您设置的密码加密。请牢记密码，忘记密码将无法恢复数据。')
-          .fontSize(13).fontColor('rgba(238,238,245,0.65)').lineHeight(22)
-          .padding(14).backgroundColor('rgba(59,130,246,0.1)')
-          .borderRadius(12).border({ width: 1, color: 'rgba(59,130,246,0.2)' })
+          .fontSize(13).fontColor(this.c('rgba(238,238,245,0.65)', '#5C4F43')).lineHeight(22)
+          .padding(14).backgroundColor(this.c('rgba(59,130,246,0.10)', 'rgba(59,130,246,0.08)'))
+          .borderRadius(12).border({ width: 1, color: this.c('rgba(59,130,246,0.2)', 'rgba(59,130,246,0.25)') })
 
         Column({ space: 6 }) {
           Text('加密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
@@ -1018,6 +1190,7 @@ struct Index {
             .type(InputType.Password)
             .onChange((v) => { this.backupPw = v; })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
@@ -1028,6 +1201,7 @@ struct Index {
             .type(InputType.Password)
             .onChange((v) => { this.backupPw2 = v; })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
             .border({ width: 1, color: this.backupPw && this.backupPw2 && this.backupPw !== this.backupPw2 ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
             .borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
@@ -1068,8 +1242,8 @@ struct Index {
           .onClick(() => this.selectImportFile())
 
         Column({ space: 6 }) {
-          Text('备份内容（粘贴加密文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
-          TextArea({ text: this.importText, placeholder: '粘贴备份内容…' })
+          Text('备份内容（粘贴加密或 OTP 文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          TextArea({ text: this.importText, placeholder: '粘贴备份内容，或粘贴 otpauth:// 格式内容…' })
             .onChange((v) => { this.importText = v; })
             .height(120).backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
@@ -1077,19 +1251,20 @@ struct Index {
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Column({ space: 6 }) {
-          Text('解密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
-          TextInput({ text: this.importPw, placeholder: '输入备份时设置的密码' })
+          Text('解密密码（加密备份时才需要填写）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          TextInput({ text: this.importPw, placeholder: '输入备份时设置的密码（明文内容无需填写）' })
             .type(InputType.Password)
             .onChange((v) => { this.importPw = v; })
             .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
 
-        Button('解密并导入')
+        Button('导入')
           .width('100%').height(50).borderRadius(15)
-          .backgroundColor(this.importText && this.importPw ? this.accentColor : this.c('#191920', '#F5F0EA'))
-          .fontColor(this.importText && this.importPw ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+          .backgroundColor(this.importText ? this.accentColor : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.importText ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doImport())
       }
@@ -1159,9 +1334,9 @@ struct Index {
   deleteConfirmDialog() {
     Column() {
       Text('确认删除').fontSize(16).fontWeight(700).fontColor(this.c('#eeeef5', '#2C1810')).margin({ bottom: 8 })
-      Text(`确定要删除「${this.deleteTarget.brand}」吗？${this.isMember ? '\n选择删除方式：' : '\n此操作不可撤销'}`)
+      Text(`确定要删除「${this.deleteTarget.brand}」吗？${this.isMember && this.loggedIn ? '\n选择删除方式：' : '\n此操作不可撤销'}`)
         .fontSize(14).fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).textAlign(TextAlign.Center).margin({ bottom: 20 }).lineHeight(22)
-      if (this.isMember) {
+      if (this.isMember && this.loggedIn) {
         Row({ space: 10 }) {
           Button('仅本地').flexGrow(1).backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.04)'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
@@ -1244,7 +1419,7 @@ struct Index {
               .margin({ top: 6 })
             }
             .alignItems(HorizontalAlign.Center)
-            .padding({ top: 24, bottom: 20 })
+            .padding({ top: 10, bottom: 10 })
             .width('100%')
 
             // ── 共用：权益列表 ────────────────────────────────────────
@@ -1307,9 +1482,10 @@ struct Index {
           }
 
         }
-        .padding({ left: 20, right: 20, bottom: 40 })
+        .padding({ left: 20, right: 20, top: 8, bottom: 40 })
+        .width('100%').constraintSize({ minHeight: '100%' })
       }
-      .scrollBar(BarState.Off).flexGrow(1)
+      .scrollBar(BarState.Off).layoutWeight(1)
     }
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
@@ -1354,6 +1530,7 @@ struct Index {
             this.userOpenId = '';
             this.harmonyLogin = false;
             saveLogin(false, '', '', '', false);
+            stopAutoSync();
             this.toast('已退出登录');
           })
       }
@@ -1392,6 +1569,11 @@ struct Index {
             onDelete: (tok: Token) => this.requestDeleteToken(tok),
             onNavHide: () => { this.navVisible = false; },
             onNavShow: () => { this.navVisible = true; },
+            isMember: this.isMember,
+            loggedIn: this.loggedIn,
+            onSync: (done: () => void) => {
+              this.cloudRestore().finally(done);
+            },
           })
         }
         .tabBar(this.tabIcon('home', 0))
@@ -1438,6 +1620,7 @@ struct Index {
               this.userOpenId = '';
               this.harmonyLogin = false;
               saveLogin(false, '', '', '', false);
+              stopAutoSync();
               this.toast('已退出登录');
             },
             onBackupTap: () => {

@@ -3,6 +3,12 @@
     "name": "entry",
     "type": "entry",
     "description": "$string:module_desc",
+    "metadata": [
+      {
+        "name": "client_id",
+        "value": "1956480977328946816"
+      }
+    ],
     "mainElement": "EntryAbility",
     "deviceTypes": ["phone", "tablet"],
     "deliveryWithInstall": true,
@@ -27,6 +33,9 @@
       }
     ],
     "requestPermissions": [
+      {
+        "name": "ohos.permission.INTERNET"
+      },
       {
         "name": "ohos.permission.CAMERA",
         "reason": "$string:camera_reason",

@@ -300,11 +300,19 @@ export struct ScanView {
               .width('100%').height(50).borderRadius(15)
               .backgroundColor(this.accentColor).fontColor('#fff').fontSize(15).fontWeight(650)
               .onClick(() => {
-                if (this.validate()) this.onAdd(this.brand.trim(), this.account.trim(), this.secret.trim().toUpperCase());
+                if (this.validate()) {
+                  this.onAdd(this.brand.trim(), this.account.trim(), this.secret.trim().toUpperCase());
+                  this.brand = '';
+                  this.account = '';
+                  this.secret = '';
+                  this.brandErr = '';
+                  this.secretErr = '';
+                }
               })
             Column().height(40)
           }
           .padding({ left: 16, right: 16, top: 16 })
+          .width('100%').constraintSize({ minHeight: '100%' })
         }
         .scrollBar(BarState.Off).flexGrow(1)
       }
