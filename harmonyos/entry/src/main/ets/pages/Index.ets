@@ -18,7 +18,7 @@ import { ProfileView } from '../views/ProfileView';
 import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
-import { initCloudDB, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
+import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
   newFileNames: string[];
@@ -118,6 +118,10 @@ struct Index {
   private toastTimer: number = -1;
   private cdTimer: number = -1;
   private autoSyncTimer: number = -1;
+  private pendingCloudInit: boolean = false;
+
+  // Mirrors AppStorage['agcAuthReady']; @Watch fires when EntryAbility finishes signInAnonymously()
+  @StorageProp('agcAuthReady') @Watch('onAgcAuthReady') agcAuthReady_: boolean = false;
 
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
 
@@ -131,6 +135,26 @@ struct Index {
         navigationBarContentColor: this.isDark ? '#FFFFFF' : '#000000'
       });
     } catch (_) {}
+  }
+
+  // Called by @Watch when agcAuthReady_ flips true in AppStorage
+  private onAgcAuthReady(propName: string): void {
+    console.log('[Index] agcAuthReady changed:', propName, this.agcAuthReady_);
+    if (!this.agcAuthReady_ || !this.pendingCloudInit) return;
+    this.pendingCloudInit = false;
+    this.doCloudInit();
+  }
+
+  private doCloudInit(): void {
+    initCloudDB().then(() => {
+      setCloudUserId(this.userOpenId);
+      console.log('[Index] cloud DB initialized (deferred after AGC auth)');
+      return this.cloudRestore();
+    }).then(() => {
+      this.startAutoSync();
+    }).catch((e: Error) => {
+      console.error('[Index] deferred cloud init failed:', e.message);
+    });
   }
 
   // ── Back navigation ─────────────────────────────────────────────
@@ -239,14 +263,24 @@ struct Index {
       const member: MemberData = await loadMember();
       this.isMember = member.isMember;
       this.boundAccount = member.boundAccount;
+
+      // ⚠️ 测试模式：临时强制会员身份（测试完成后删除此行）
+      this.isMember = true;
+
       this.refreshOtp();
       if (this.isMember) {
-        // 初始化云数据库
-        await initCloudDB();
-        console.log('[Index] cloud DB initialized');
-
-        await this.cloudRestore();
-        this.startAutoSync();
+        if (this.agcAuthReady_) {
+          // AGC auth already finished — initialize cloud DB now
+          await initCloudDB();
+          setCloudUserId(this.userOpenId);
+          console.log('[Index] cloud DB initialized');
+          await this.cloudRestore();
+          this.startAutoSync();
+        } else {
+          // AGC auth still in flight — onAgcAuthReady() will handle init once it completes
+          this.pendingCloudInit = true;
+          console.log('[Index] cloud DB init deferred (waiting for AGC auth)');
+        }
       } else {
         try {
           const restored = await restoreOwnedPurchases(ctx);
@@ -320,6 +354,12 @@ struct Index {
     });
     saveTokens(this.tokens);
     this.refreshOtp();
+    if (this.isMember && this.loggedIn) {
+      const updated = this.tokens.find((t: Token): boolean => t.id === id);
+      if (updated) {
+        updateToken(updated).catch((e: Error) => console.error('[Index] cloudUpdate failed:', e.message));
+      }
+    }
     this.editToken = {} as Token;
     this.toast('已保存');
   }
@@ -333,6 +373,7 @@ struct Index {
   private deleteToken(localOnly: boolean): void {
     if (!this.deleteTarget.id && !this.editToken.id) return;
     const id = this.deleteTarget.id || this.editToken.id;
+    const tokenToDelete = this.tokens.find((t: Token): boolean => t.id === id);
     this.tokens = this.tokens.filter((t: Token) => t.id !== id);
     saveTokens(this.tokens);
     this.refreshOtp();
@@ -340,9 +381,8 @@ struct Index {
     this.showDeleteConfirm = false;
     this.deleteTarget = {} as Token;
     this.toast('已删除');
-    if (this.isMember && !localOnly) {
-      // Fire-and-forget async cloud delete
-      this.cloudDelete(id);
+    if (this.isMember && this.loggedIn && !localOnly && tokenToDelete) {
+      this.cloudDelete(tokenToDelete);
     }
   }
 
@@ -379,6 +419,7 @@ struct Index {
       console.info(`[ArcaneKey] HuaweiID auth success: openID=${openId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
       this.loggedIn = true;
       this.userOpenId = openId;
+      setCloudUserId(openId);
       this.userName = cred?.nickName || '华为用户';
       this.userAvatar = cred?.avatarUri || '';
       this.harmonyLogin = true;
@@ -386,6 +427,10 @@ struct Index {
       this.privacyAgreed = false;
       await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, openId);
       this.toast('登录成功');
+      if (this.isMember) {
+        await this.cloudRestore();
+        this.startAutoSync();
+      }
     } catch (e) {
       const code = (e as IapError).code;
       if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
@@ -401,6 +446,10 @@ struct Index {
         this.privacyAgreed = false;
         await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, '');
         this.toast('登录成功');
+        if (this.isMember) {
+          await this.cloudRestore();
+          this.startAutoSync();
+        }
       }
     }
   }
@@ -516,15 +565,9 @@ struct Index {
     try {
       console.log('[Index] cloudBackup started, tokens:', this.tokens.length);
 
-      // 同步所有本地口令到云端
+      // upsert 全部本地口令到云端（主键 secret 匹配则更新，否则新增）
       for (const token of this.tokens) {
-        if (token._id) {
-          // 已有云端 ID，更新
-          await updateToken(token);
-        } else {
-          // 没有云端 ID，新增
-          await addToken(token);
-        }
+        await addToken(token);
       }
 
       console.log('[Index] cloudBackup completed');
@@ -562,19 +605,15 @@ struct Index {
     }
   }
 
-  private async cloudDelete(tokenId: string): Promise<void> {
+  private async cloudDelete(token: SyncToken): Promise<void> {
     if (!this.isMember) return;
 
     try {
-      console.log('[Index] cloudDelete started, token:', tokenId);
-
-      // 软删除云端口令
-      await softDeleteToken(tokenId);
-
+      console.log('[Index] cloudDelete started, token:', token.id);
+      await softDeleteToken(token);
       console.log('[Index] cloudDelete completed');
     } catch (e) {
       console.error('[Index] cloudDelete failed:', (e as Error).message);
-      // 删除失败不提示，本地已删除
     }
   }
 
@@ -1189,9 +1228,9 @@ struct Index {
   deleteConfirmDialog() {
     Column() {
       Text('确认删除').fontSize(16).fontWeight(700).fontColor(this.c('#eeeef5', '#2C1810')).margin({ bottom: 8 })
-      Text(`确定要删除「${this.deleteTarget.brand}」吗？${this.isMember ? '\n选择删除方式：' : '\n此操作不可撤销'}`)
+      Text(`确定要删除「${this.deleteTarget.brand}」吗？${this.isMember && this.loggedIn ? '\n选择删除方式：' : '\n此操作不可撤销'}`)
         .fontSize(14).fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).textAlign(TextAlign.Center).margin({ bottom: 20 }).lineHeight(22)
-      if (this.isMember) {
+      if (this.isMember && this.loggedIn) {
         Row({ space: 10 }) {
           Button('仅本地').flexGrow(1).backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.04)'))
             .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
@@ -1384,6 +1423,7 @@ struct Index {
             this.userOpenId = '';
             this.harmonyLogin = false;
             saveLogin(false, '', '', '', false);
+            stopAutoSync();
             this.toast('已退出登录');
           })
       }
@@ -1422,6 +1462,11 @@ struct Index {
             onDelete: (tok: Token) => this.requestDeleteToken(tok),
             onNavHide: () => { this.navVisible = false; },
             onNavShow: () => { this.navVisible = true; },
+            isMember: this.isMember,
+            loggedIn: this.loggedIn,
+            onSync: (done: () => void) => {
+              this.cloudRestore().finally(done);
+            },
           })
         }
         .tabBar(this.tabIcon('home', 0))
@@ -1468,6 +1513,7 @@ struct Index {
               this.userOpenId = '';
               this.harmonyLogin = false;
               saveLogin(false, '', '', '', false);
+              stopAutoSync();
               this.toast('已退出登录');
             },
             onBackupTap: () => {

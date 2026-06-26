@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "storeFile": "/Users/xiaoan/certs/arcanekey.p12",
-          "storePassword": "0000001A9B016CF6FB6DC9DA8BE42A1402C38F22EF4C82E615168E7EBF524B6564A268BF7D85F718D8FC",
-          "keyAlias": "arcanekey",
-          "keyPassword": "0000001A0E10291DB3F2E0D7FAA84FF3A52C097BE91CF0776126CC9CA3492E3738B8AF70E8312E90079C",
+          "certpath": "/Users/xiaoan/.ohos/config/default_harmonyos_KNZC_iLyUm8Ft4SWrp6K8DoOGQkYc8ntF9bCZZTyJmU=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001ACE693A7591563C2E1CFAEC13784B773E96D605F7158947A04095817E640B44E19BE48769B3EB",
+          "profile": "/Users/xiaoan/.ohos/config/default_harmonyos_KNZC_iLyUm8Ft4SWrp6K8DoOGQkYc8ntF9bCZZTyJmU=.p7b",
           "signAlg": "SHA256withECDSA",
-          "profile": "/Users/xiaoan/certs/arcanekey_release_profileRelease_副本.p7b",
-          "certpath": "/Users/xiaoan/certs/arcanekey_release0523_副本.cer"
+          "storeFile": "/Users/xiaoan/.ohos/config/default_harmonyos_KNZC_iLyUm8Ft4SWrp6K8DoOGQkYc8ntF9bCZZTyJmU=.p12",
+          "storePassword": "0000001A49514E5B3A38F1C2506DA4BAB797EFF2ADA040B14718211560CDE4AEE434BE6177D79C9A3C55"
         }
       }
     ],
