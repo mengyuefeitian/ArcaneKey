@@ -264,9 +264,6 @@ struct Index {
       this.isMember = member.isMember;
       this.boundAccount = member.boundAccount;
 
-      // ⚠️ 测试模式：临时强制会员身份（测试完成后删除此行）
-      this.isMember = true;
-
       this.refreshOtp();
       if (this.isMember) {
         if (this.agcAuthReady_) {
