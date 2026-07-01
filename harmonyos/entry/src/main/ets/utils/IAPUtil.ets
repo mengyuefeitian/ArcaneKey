@@ -15,6 +15,16 @@ export interface PurchaseTokenResult {
 }
 
 
+// 沙盒自检：Debug 签名包 + AGC 沙盒测试账号登录时返回 true，用于真机测试排查"是否走了真实扣费"
+export async function checkSandboxStatus(context: common.UIAbilityContext): Promise<void> {
+  try {
+    const isSandbox = await iap.isSandboxActivated(context);
+    console.info(`[IAPUtil] sandbox activated: ${isSandbox}`);
+  } catch (error) {
+    console.error('[IAPUtil] isSandboxActivated failed:', error);
+  }
+}
+
 export async function launchPurchase(context: common.UIAbilityContext): Promise<PurchaseTokenResult> {
   try {
     const result = await iap.createPurchase(context, {

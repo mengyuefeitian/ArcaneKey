@@ -9,7 +9,7 @@ import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode } from '../utils/StorageUtil';
-import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase } from '../utils/IAPUtil';
+import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
 import { HomeView } from '../views/HomeView';
@@ -743,6 +743,7 @@ struct Index {
     const ctx = AppStorage.get<common.UIAbilityContext>('context');
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
+      await checkSandboxStatus(ctx);
       const tokenResult = await launchPurchase(ctx);
       await saveMember(true, this.userName, this.userOpenId);
       this.isMember = true;
