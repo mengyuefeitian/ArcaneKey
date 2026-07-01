@@ -61,9 +61,9 @@ export async function initCloudDB(): Promise<boolean> {
           {
             objectTypeName: 'SyncToken',
             fields: [
-              { fieldName: 'id', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false },
-              { fieldName: 'brand', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false },
-              { fieldName: 'account', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false },
+              { fieldName: 'id', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' },
+              { fieldName: 'brand', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' },
+              { fieldName: 'account', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' },
               { fieldName: 'secret', fieldType: 'String', belongPrimaryKey: true, notNull: true, isNeedEncrypt: false, isSensitive: false },
               { fieldName: 'deleted_at', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
               { fieldName: 'timestamp', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
