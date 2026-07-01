@@ -1,5 +1,6 @@
 import { iap } from '@kit.IAPKit';
 import { common } from '@kit.AbilityKit';
+import { util } from '@kit.ArkTS';
 
 export const MEMBER_PRODUCT_ID = 'com.arcanekey.authenticator.member_lifetime';
 
@@ -7,6 +8,37 @@ interface PurchasePayload {
   productId?: string;
   purchaseToken?: string;
   orderId?: string;
+  purchaseOrderId?: string;
+}
+
+// queryPurchases()'s purchaseDataList entries are NOT flat purchase objects —
+// each one is { type, jwsPurchaseOrder }, where jwsPurchaseOrder is a JWS
+// compact string (header.payload.signature) and the actual productId /
+// purchaseToken / purchaseOrderId fields live base64url-encoded in the
+// payload segment. Confirmed by logging the raw record on a real device.
+interface QueryPurchaseRecord {
+  type?: number;
+  jwsPurchaseOrder?: string;
+}
+
+function decodeJwsPurchasePayload(jws: string): PurchasePayload | null {
+  const parts = jws.split('.');
+  if (parts.length < 2) {
+    return null;
+  }
+  let segment = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  while (segment.length % 4 !== 0) {
+    segment += '=';
+  }
+  const helper = new util.Base64Helper();
+  const decoded: Uint8Array = helper.decodeSync(segment);
+  const json = new util.TextDecoder('utf-8').decode(decoded);
+  return JSON.parse(json) as PurchasePayload;
+}
+
+interface IapError {
+  code?: number;
+  message?: string;
 }
 
 export interface PurchaseTokenResult {
@@ -14,6 +46,16 @@ export interface PurchaseTokenResult {
   purchaseOrderId: string;
 }
 
+
+// 沙盒自检：Debug 签名包 + AGC 沙盒测试账号登录时返回 true，用于真机测试排查"是否走了真实扣费"
+export async function checkSandboxStatus(context: common.UIAbilityContext): Promise<void> {
+  try {
+    const isSandbox = await iap.isSandboxActivated(context);
+    console.info(`[IAPUtil] sandbox activated: ${isSandbox}`);
+  } catch (error) {
+    console.error('[IAPUtil] isSandboxActivated failed:', error);
+  }
+}
 
 export async function launchPurchase(context: common.UIAbilityContext): Promise<PurchaseTokenResult> {
   try {
@@ -53,27 +95,63 @@ export async function acknowledgePurchase(
   }
 }
 
+async function findPurchase(
+  context: common.UIAbilityContext,
+  queryType: iap.PurchaseQueryType
+): Promise<PurchaseTokenResult | null> {
+  console.info(`[IAPUtil] findPurchase: querying queryType=${queryType}`);
+  const result = await iap.queryPurchases(context, {
+    productType: iap.ProductType.NONCONSUMABLE,
+    queryType: queryType,
+  });
+  const count = result.purchaseDataList ? result.purchaseDataList.length : 0;
+  console.info(`[IAPUtil] findPurchase: queryType=${queryType} returned ${count} record(s)`);
+  if (!result.purchaseDataList || result.purchaseDataList.length === 0) {
+    return null;
+  }
+  for (const data of result.purchaseDataList) {
+    const record = JSON.parse(data) as QueryPurchaseRecord;
+    if (!record.jwsPurchaseOrder) {
+      continue;
+    }
+    const payload = decodeJwsPurchasePayload(record.jwsPurchaseOrder);
+    console.info(`[IAPUtil] findPurchase: record productId=${payload?.productId ?? 'empty'}`);
+    if (payload && payload.productId === MEMBER_PRODUCT_ID) {
+      console.info('[IAPUtil] findPurchase: matched MEMBER_PRODUCT_ID');
+      return { purchaseToken: payload.purchaseToken ?? '', purchaseOrderId: payload.purchaseOrderId ?? '' };
+    }
+  }
+  console.info(`[IAPUtil] findPurchase: queryType=${queryType} had no record matching MEMBER_PRODUCT_ID`);
+  return null;
+}
+
 export async function restoreOwnedPurchases(
   context: common.UIAbilityContext
 ): Promise<PurchaseTokenResult | null> {
+  console.info('[IAPUtil] restoreOwnedPurchases: started');
   try {
-    const result = await iap.queryPurchases(context, {
-      productType: iap.ProductType.NONCONSUMABLE,
-      queryType: iap.PurchaseQueryType.CURRENT_ENTITLEMENT,
-    });
-    if (!result.purchaseDataList || result.purchaseDataList.length === 0) {
-      return null;
+    const entitled = await findPurchase(context, iap.PurchaseQueryType.CURRENT_ENTITLEMENT);
+    if (entitled) {
+      console.info('[IAPUtil] restoreOwnedPurchases: found via CURRENT_ENTITLEMENT');
+      return entitled;
     }
-    for (const data of result.purchaseDataList) {
-      const payload = JSON.parse(data) as PurchasePayload;
-      if (payload.productId === MEMBER_PRODUCT_ID) {
-        const token: PurchaseTokenResult = { purchaseToken: payload.purchaseToken ?? '', purchaseOrderId: payload.orderId ?? '' };
-        return token;
-      }
+    // A purchase can be PRODUCT_OWNED at AGC but never show up as a CURRENT_ENTITLEMENT
+    // if finishPurchase() was never successfully called on it (e.g. an earlier
+    // acknowledgePurchase attempt failed silently). Finish it here so it becomes a
+    // real entitlement, then return its token.
+    console.info('[IAPUtil] restoreOwnedPurchases: not found via CURRENT_ENTITLEMENT, trying UNFINISHED');
+    const unfinished = await findPurchase(context, iap.PurchaseQueryType.UNFINISHED);
+    if (unfinished) {
+      console.info('[IAPUtil] restoreOwnedPurchases: found via UNFINISHED, acknowledging');
+      await acknowledgePurchase(context, unfinished.purchaseToken, unfinished.purchaseOrderId);
+      console.info('[IAPUtil] restoreOwnedPurchases: acknowledged successfully');
+      return unfinished;
     }
+    console.info('[IAPUtil] restoreOwnedPurchases: no matching record found via either query type');
     return null;
   } catch (error) {
-    console.error('IAP restoreOwnedPurchases failed:', error);
+    const err = error as IapError;
+    console.error(`[IAPUtil] restoreOwnedPurchases failed: code=${err.code ?? 'unknown'} message=${err.message ?? JSON.stringify(error)}`);
     return null; // 恢复失败时返回 null，不抛出异常
   }
 }

@@ -202,3 +202,40 @@ export function decryptData(enc: string, pass: string): object[] {
   }
   return JSON.parse(utf8Decode(jsonBytes)) as object[];
 }
+
+// ── 云同步专用：按记录+字段派生密钥加密（unionID + recordId + fieldName，无随机 salt） ──
+// 与 encryptData/decryptData 不同：同一账号对同一 (recordId, fieldName) 每次加密结果必须一致，
+// 供 SyncUtil.sync() 按 secret 做本地/云端去重比对（比对时用解密后的明文）。
+// recordId + fieldName 参与派生是为了避免同一账号下所有记录/字段共用同一个密钥流（多次一密弱点）。
+//
+// 迭代次数刻意远低于 encryptData/decryptData 的 10000 次：这里派生密钥的目的是
+// "确定性 + 每个 (record, field) 唯一"，不是像备份密码那样需要抗离线暴力破解
+// （unionId 不是用户手输的低熵密码）。真机实测 10000 次纯 JS HMAC-SHA1 会同步阻塞
+// 主线程数秒，触发 HarmonyOS THREAD_BLOCK 看门狗直接杀进程；降到 CLOUD_SYNC_KDF_ROUNDS
+// 后单次调用在毫秒级，不再有这个问题。
+const CLOUD_SYNC_KDF_ROUNDS = 10;
+
+export function encryptFieldForCloud(value: string, unionId: string, recordId: string, fieldName: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1:' + recordId + ':' + fieldName);
+  const key = pbkdf2(unionId, salt, CLOUD_SYNC_KDF_ROUNDS, 32);
+  const valueBytes = utf8Encode(value);
+  const xored: number[] = [];
+  for (let i = 0; i < valueBytes.length; i++) {
+    xored.push(valueBytes[i] ^ key[i % 32]);
+  }
+  const arr = new Uint8Array(xored);
+  const helper = new util.Base64Helper();
+  return helper.encodeToStringSync(arr);
+}
+
+export function decryptFieldForCloud(enc: string, unionId: string, recordId: string, fieldName: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1:' + recordId + ':' + fieldName);
+  const key = pbkdf2(unionId, salt, CLOUD_SYNC_KDF_ROUNDS, 32);
+  const helper = new util.Base64Helper();
+  const decoded: Uint8Array = helper.decodeSync(enc);
+  const plain: number[] = [];
+  for (let i = 0; i < decoded.length; i++) {
+    plain.push(decoded[i] ^ key[i % 32]);
+  }
+  return utf8Decode(plain);
+}

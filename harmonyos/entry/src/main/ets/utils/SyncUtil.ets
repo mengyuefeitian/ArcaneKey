@@ -1,6 +1,7 @@
 import cloud from '@hw-agconnect/cloud';
 import { DatabaseCollection } from '@hw-agconnect/cloud';
 import { SyncToken } from '../model/Token';
+import { encryptFieldForCloud, decryptFieldForCloud } from './CryptoUtil';
 
 const ZONE_NAME = 'ArcaneKey';
 const SYNC_INTERVAL_MS = 30 * 60 * 1000;
@@ -24,9 +25,9 @@ class SyncTokenRecord {
 function buildRecord(token: SyncToken): SyncTokenRecord {
   const r = new SyncTokenRecord();
   r.id = token.id;
-  r.brand = token.brand;
-  r.account = token.account;
-  r.secret = token.secret;
+  r.brand = encryptFieldForCloud(token.brand, currentUserId, token.id, 'brand');
+  r.account = encryptFieldForCloud(token.account, currentUserId, token.id, 'account');
+  r.secret = encryptFieldForCloud(token.secret, currentUserId, token.id, 'secret');
   r.is_deleted = token.is_deleted ?? false;
   r.deleted_at = token.deleted_at ?? '';
   r.timestamp = new Date().toISOString();
@@ -37,9 +38,9 @@ function buildRecord(token: SyncToken): SyncTokenRecord {
 function recordToToken(r: SyncTokenRecord): SyncToken {
   return {
     id: r.id,
-    brand: r.brand,
-    account: r.account,
-    secret: r.secret,
+    brand: decryptFieldForCloud(r.brand, currentUserId, r.id, 'brand'),
+    account: decryptFieldForCloud(r.account, currentUserId, r.id, 'account'),
+    secret: decryptFieldForCloud(r.secret, currentUserId, r.id, 'secret'),
     is_deleted: r.is_deleted,
     deleted_at: r.deleted_at,
     timestamp: r.timestamp,
@@ -55,7 +56,7 @@ export async function initCloudDB(): Promise<boolean> {
   try {
     const db = cloud.database({
       objectTypeInfo: {
-        schemaVersion: 2,
+        schemaVersion: 6,
         objectTypes: [
           {
             objectTypeName: 'SyncToken',
@@ -64,10 +65,10 @@ export async function initCloudDB(): Promise<boolean> {
               { fieldName: 'brand', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' },
               { fieldName: 'account', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' },
               { fieldName: 'secret', fieldType: 'String', belongPrimaryKey: true, notNull: true, isNeedEncrypt: false, isSensitive: false },
-              { fieldName: 'deleted_at', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false, defaultValue: '' },
+              { fieldName: 'deleted_at', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
               { fieldName: 'timestamp', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
               { fieldName: 'is_deleted', fieldType: 'Boolean', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
-              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' }
+              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: true, notNull: true, isNeedEncrypt: false, isSensitive: false }
             ],
             indexes: []
           }
@@ -77,7 +78,7 @@ export async function initCloudDB(): Promise<boolean> {
             objectTypeName: 'SyncToken',
             permissions: [
               { role: 'World', rights: [] },
-              { role: 'Authenticated', rights: [] },
+              { role: 'Authenticated', rights: ['Read', 'Upsert', 'Delete'] },
               { role: 'Creator', rights: ['Read', 'Upsert', 'Delete'] },
               { role: 'Administrator', rights: ['Read', 'Upsert', 'Delete'] }
             ]
@@ -100,6 +101,9 @@ export async function addToken(token: SyncToken): Promise<void> {
   if (!tokenCollection) {
     throw new Error('Cloud DB not initialized');
   }
+  if (!currentUserId) {
+    throw new Error('Cloud user not identified');
+  }
   try {
     await tokenCollection.upsert(buildRecord(token));
     console.log('[SyncUtil] addToken success:', token.id);
@@ -117,6 +121,9 @@ export async function updateToken(token: SyncToken): Promise<void> {
 export async function softDeleteToken(token: SyncToken): Promise<void> {
   if (!tokenCollection) {
     throw new Error('Cloud DB not initialized');
+  }
+  if (!currentUserId) {
+    throw new Error('Cloud user not identified');
   }
   try {
     const deleted: SyncToken = {
@@ -141,6 +148,9 @@ export async function softDeleteToken(token: SyncToken): Promise<void> {
 export async function restoreToken(token: SyncToken): Promise<void> {
   if (!tokenCollection) {
     throw new Error('Cloud DB not initialized');
+  }
+  if (!currentUserId) {
+    throw new Error('Cloud user not identified');
   }
   try {
     const restored: SyncToken = {
@@ -170,12 +180,16 @@ export async function sync(localTokens: SyncToken[], isMember: boolean): Promise
     console.error('[SyncUtil] sync failed: Cloud DB not initialized');
     return localTokens;
   }
+  if (!currentUserId) {
+    console.error('[SyncUtil] sync failed: cloud user not identified');
+    return localTokens;
+  }
 
   try {
     console.log('[SyncUtil] sync started, local tokens:', localTokens.length);
 
     const cloudRecords: SyncTokenRecord[] =
-      await tokenCollection.query().equalTo('is_deleted', false).get();
+      await tokenCollection.query().equalTo('is_deleted', false).equalTo('userId', currentUserId).get();
     const cloudTokens: SyncToken[] = cloudRecords.map((r: SyncTokenRecord): SyncToken => recordToToken(r));
 
     const toUpload: SyncTokenRecord[] = [];
