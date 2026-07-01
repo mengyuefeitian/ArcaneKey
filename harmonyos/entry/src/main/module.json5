@@ -6,7 +6,7 @@
     "metadata": [
       {
         "name": "client_id",
-        "value": "1956480977328946816"
+        "value": "6917606273600762290"
       }
     ],
     "mainElement": "EntryAbility",
@@ -35,6 +35,9 @@
     "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET"
+      },
+      {
+        "name": "ohos.permission.GET_NETWORK_INFO"
       },
       {
         "name": "ohos.permission.CAMERA",

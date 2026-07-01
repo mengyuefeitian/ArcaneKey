@@ -421,12 +421,13 @@ struct Index {
 
   private async doHarmonyLogin(): Promise<void> {
     if (!this.privacyAgreed) { this.toast('请先同意隐私保护协议'); return; }
-    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    const ctx = this.getUIContext().getHostContext();
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
       const request = new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
-      request.scopes = ['openid', 'profile'];
+      request.scopes = ['profile'];
       request.forceAuthorization = true;
+      request.state = util.generateRandomUUID();
       const controller = new authentication.AuthenticationController(ctx);
       const resp = await controller.executeRequest(request);
       const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
@@ -452,19 +453,7 @@ struct Index {
         this.toast('已取消登录');
       } else {
         console.warn(`[ArcaneKey] HuaweiID auth error: code=${code}`);
-        this.loggedIn = true;
-        this.userOpenId = '';
-        this.userName = '华为用户';
-        this.userAvatar = '';
-        this.harmonyLogin = true;
-        this.showLogin = false;
-        this.privacyAgreed = false;
-        await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, '');
-        this.toast('登录成功');
-        if (this.isMember) {
-          await this.cloudRestore();
-          this.startAutoSync();
-        }
+        this.toast(`登录失败(${code})，请重试`);
       }
     }
   }
@@ -1134,7 +1123,7 @@ struct Index {
         }
         .width(72).height(72)
 
-        Text('使用鸿蒙账号快速登录')
+        Text('使用华为账号快速登录')
           .fontSize(14).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43')).textAlign(TextAlign.Center)
 
         // Privacy agreement
@@ -1174,13 +1163,13 @@ struct Index {
         .width('100%')
         .padding({ left: 4, right: 4 })
 
-        Button('鸿蒙账号登录')
+        Button('华为账号登录')
           .width('100%').height(50).borderRadius(15)
           .backgroundColor(this.privacyAgreed ? this.accentColor : this.c('#191920', '#F5F0EA'))
           .fontColor(this.privacyAgreed ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650)
           .onClick(() => { this.doHarmonyLogin(); })
-        Text('将使用设备上的鸿蒙账号信息')
+        Text('将使用设备上的华为账号信息')
           .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
       }
       .padding({ left: 20, right: 20, top: 20 })
@@ -1410,13 +1399,13 @@ struct Index {
               Text('绑定账号').fontSize(10).fontColor('rgba(238,238,245,0.65)')
               Row({ space: 10 }) {
                 Stack() {
-                  Text(this.boundAccount.length > 0 ? this.boundAccount[0].toUpperCase() : '鸿')
+                  Text(this.boundAccount.length > 0 ? this.boundAccount[0].toUpperCase() : '华')
                     .fontSize(14).fontColor(this.c('#fff', '#fff')).fontWeight(700)
                 }
                 .width(32).height(32).borderRadius(16)
                 .backgroundColor(this.accentColor)
                 Column({ space: 2 }) {
-                  Text(this.boundAccount || '鸿蒙用户').fontSize(13).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+                  Text(this.boundAccount || '华为用户').fontSize(13).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
                   Text('换设备登录同账号可恢复会员').fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                 }.alignItems(HorizontalAlign.Start)
               }.width('100%')
@@ -1449,7 +1438,7 @@ struct Index {
               // ── 状态 1：未登录 ──────────────────────────────────────
               Column({ space: 4 }) {
                 Text('购买会员需要先登录').fontSize(12).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43'))
-                Text('会员将绑定至您的鸿蒙账号').fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+                Text('会员将绑定至您的华为账号').fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }
               .width('100%').padding(10).alignItems(HorizontalAlign.Center)
               .backgroundColor(this.accentColor + '1a')
@@ -1475,7 +1464,7 @@ struct Index {
                 Text('👤').fontSize(16)
                 Column({ space: 2 }) {
                   Text('购买后绑定至').fontSize(10).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
-                  Text(this.userName || '鸿蒙用户').fontSize(12).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+                  Text(this.userName || '华为用户').fontSize(12).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
                 }.alignItems(HorizontalAlign.Start)
               }
               .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
@@ -1531,7 +1520,7 @@ struct Index {
           Text(this.userPhone).fontSize(14).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
         }
         if (this.harmonyLogin) {
-          Text('鸿蒙账号登录').fontSize(12).fontColor(this.accentColor).fontWeight(500)
+          Text('华为账号登录').fontSize(12).fontColor(this.accentColor).fontWeight(500)
             .padding({ left: 12, right: 12, top: 4, bottom: 4 })
             .backgroundColor(this.accentColor + '15')
             .borderRadius(8)
