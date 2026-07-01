@@ -1,5 +1,6 @@
 import { iap } from '@kit.IAPKit';
 import { common } from '@kit.AbilityKit';
+import { util } from '@kit.ArkTS';
 
 export const MEMBER_PRODUCT_ID = 'com.arcanekey.authenticator.member_lifetime';
 
@@ -7,6 +8,32 @@ interface PurchasePayload {
   productId?: string;
   purchaseToken?: string;
   orderId?: string;
+  purchaseOrderId?: string;
+}
+
+// queryPurchases()'s purchaseDataList entries are NOT flat purchase objects —
+// each one is { type, jwsPurchaseOrder }, where jwsPurchaseOrder is a JWS
+// compact string (header.payload.signature) and the actual productId /
+// purchaseToken / purchaseOrderId fields live base64url-encoded in the
+// payload segment. Confirmed by logging the raw record on a real device.
+interface QueryPurchaseRecord {
+  type?: number;
+  jwsPurchaseOrder?: string;
+}
+
+function decodeJwsPurchasePayload(jws: string): PurchasePayload | null {
+  const parts = jws.split('.');
+  if (parts.length < 2) {
+    return null;
+  }
+  let segment = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  while (segment.length % 4 !== 0) {
+    segment += '=';
+  }
+  const helper = new util.Base64Helper();
+  const decoded: Uint8Array = helper.decodeSync(segment);
+  const json = new util.TextDecoder('utf-8').decode(decoded);
+  return JSON.parse(json) as PurchasePayload;
 }
 
 interface IapError {
@@ -83,12 +110,15 @@ async function findPurchase(
     return null;
   }
   for (const data of result.purchaseDataList) {
-    console.info(`[IAPUtil] findPurchase: raw record=${data}`);
-    const payload = JSON.parse(data) as PurchasePayload;
-    console.info(`[IAPUtil] findPurchase: record productId=${payload.productId ?? 'empty'}`);
-    if (payload.productId === MEMBER_PRODUCT_ID) {
+    const record = JSON.parse(data) as QueryPurchaseRecord;
+    if (!record.jwsPurchaseOrder) {
+      continue;
+    }
+    const payload = decodeJwsPurchasePayload(record.jwsPurchaseOrder);
+    console.info(`[IAPUtil] findPurchase: record productId=${payload?.productId ?? 'empty'}`);
+    if (payload && payload.productId === MEMBER_PRODUCT_ID) {
       console.info('[IAPUtil] findPurchase: matched MEMBER_PRODUCT_ID');
-      return { purchaseToken: payload.purchaseToken ?? '', purchaseOrderId: payload.orderId ?? '' };
+      return { purchaseToken: payload.purchaseToken ?? '', purchaseOrderId: payload.purchaseOrderId ?? '' };
     }
   }
   console.info(`[IAPUtil] findPurchase: queryType=${queryType} had no record matching MEMBER_PRODUCT_ID`);
