@@ -1,7 +1,7 @@
 import cloud from '@hw-agconnect/cloud';
 import { DatabaseCollection } from '@hw-agconnect/cloud';
 import { SyncToken } from '../model/Token';
-import { encryptSecretForCloud, decryptSecretFromCloud } from './CryptoUtil';
+import { encryptFieldForCloud, decryptFieldForCloud } from './CryptoUtil';
 
 const ZONE_NAME = 'ArcaneKey';
 const SYNC_INTERVAL_MS = 30 * 60 * 1000;
@@ -25,9 +25,9 @@ class SyncTokenRecord {
 function buildRecord(token: SyncToken): SyncTokenRecord {
   const r = new SyncTokenRecord();
   r.id = token.id;
-  r.brand = token.brand;
-  r.account = token.account;
-  r.secret = encryptSecretForCloud(token.secret, currentUserId);
+  r.brand = encryptFieldForCloud(token.brand, currentUserId, token.id, 'brand');
+  r.account = encryptFieldForCloud(token.account, currentUserId, token.id, 'account');
+  r.secret = encryptFieldForCloud(token.secret, currentUserId, token.id, 'secret');
   r.is_deleted = token.is_deleted ?? false;
   r.deleted_at = token.deleted_at ?? '';
   r.timestamp = new Date().toISOString();
@@ -38,9 +38,9 @@ function buildRecord(token: SyncToken): SyncTokenRecord {
 function recordToToken(r: SyncTokenRecord): SyncToken {
   return {
     id: r.id,
-    brand: r.brand,
-    account: r.account,
-    secret: decryptSecretFromCloud(r.secret, currentUserId),
+    brand: decryptFieldForCloud(r.brand, currentUserId, r.id, 'brand'),
+    account: decryptFieldForCloud(r.account, currentUserId, r.id, 'account'),
+    secret: decryptFieldForCloud(r.secret, currentUserId, r.id, 'secret'),
     is_deleted: r.is_deleted,
     deleted_at: r.deleted_at,
     timestamp: r.timestamp,
