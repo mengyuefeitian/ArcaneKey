@@ -759,6 +759,7 @@ struct Index {
       this.boundAccount = this.userName;
       this.toast('开通成功');
       this.showMembership = false;
+      await this.initCloudSyncIfReady();
       // Acknowledge purchase to prevent auto-refund after 24h
       try { await acknowledgePurchase(ctx, tokenResult.purchaseToken, tokenResult.purchaseOrderId); } catch (_) {}
     } catch (e) {
@@ -797,6 +798,7 @@ struct Index {
         this.isMember = true;
         this.boundAccount = bound;
         this.toast('会员已恢复');
+        await this.initCloudSyncIfReady();
       } else {
         this.toast('未找到有效购买记录');
       }
