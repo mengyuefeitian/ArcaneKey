@@ -81,7 +81,10 @@ struct Index {
   @State privacyAgreed: boolean = false;
 
   // ── Membership ──────────────────────────────────────────────────
-  @State isMember: boolean = false;
+  // @Watch centralizes cloud-sync init: every place that flips isMember to
+  // true (cold start, fresh purchase, restored purchase) triggers it exactly
+  // once here, instead of each call site having to remember to call it.
+  @State @Watch('onIsMemberChanged') isMember: boolean = false;
   @State boundAccount: string = '';
 
   // ── Edit Secret Visibility ──────────────────────────────────────
@@ -143,6 +146,18 @@ struct Index {
     if (!this.agcAuthReady_ || !this.pendingCloudInit) return;
     this.pendingCloudInit = false;
     this.doCloudInit();
+  }
+
+  // Called by @Watch whenever isMember is assigned (cold start already-member,
+  // fresh purchase, restored purchase — every path that unlocks membership).
+  // Fire-and-forget, same as doCloudInit() above; the caller doesn't need to
+  // await this to keep making progress.
+  private onIsMemberChanged(): void {
+    console.log('[Index] isMember changed:', this.isMember);
+    if (!this.isMember) return;
+    this.initCloudSyncIfReady().catch((e: Error) => {
+      console.error('[Index] onIsMemberChanged: initCloudSyncIfReady failed:', e.message);
+    });
   }
 
   private doCloudInit(): void {
@@ -283,9 +298,9 @@ struct Index {
       this.boundAccount = member.boundAccount;
 
       this.refreshOtp();
-      if (this.isMember) {
-        await this.initCloudSyncIfReady();
-      } else {
+      // isMember was just assigned above (or below, on restore) — the @Watch on
+      // isMember triggers initCloudSyncIfReady() automatically, no explicit call needed.
+      if (!this.isMember) {
         try {
           const restored = await restoreOwnedPurchases(ctx);
           if (restored) {
@@ -295,7 +310,6 @@ struct Index {
             }
             this.isMember = true;
             this.boundAccount = member.boundAccount;
-            await this.initCloudSyncIfReady();
           }
         } catch (_) {}
       }
@@ -304,9 +318,8 @@ struct Index {
     }
   }
 
-  // Shared by loadData()'s two membership-detection paths (already-flagged member,
-  // and auto-restored via restoreOwnedPurchases on a fresh install) so both trigger
-  // cloud DB init/restore identically instead of only one of them.
+  // Actually invoked via onIsMemberChanged() (the @Watch on isMember above) —
+  // call sites just set this.isMember, they don't need to call this directly.
   private async initCloudSyncIfReady(): Promise<void> {
     if (this.agcAuthReady_) {
       // AGC auth already finished — initialize cloud DB now
@@ -755,11 +768,10 @@ struct Index {
       await checkSandboxStatus(ctx);
       const tokenResult = await launchPurchase(ctx);
       await saveMember(true, this.userName, this.userOpenId);
-      this.isMember = true;
+      this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
       this.boundAccount = this.userName;
       this.toast('开通成功');
       this.showMembership = false;
-      await this.initCloudSyncIfReady();
       // Acknowledge purchase to prevent auto-refund after 24h
       try { await acknowledgePurchase(ctx, tokenResult.purchaseToken, tokenResult.purchaseOrderId); } catch (_) {}
     } catch (e) {
@@ -795,10 +807,9 @@ struct Index {
       if (result) {
         const bound = this.userName || this.boundAccount;
         await saveMember(true, bound, this.userOpenId);
-        this.isMember = true;
+        this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
         this.boundAccount = bound;
         this.toast('会员已恢复');
-        await this.initCloudSyncIfReady();
       } else {
         this.toast('未找到有效购买记录');
       }
