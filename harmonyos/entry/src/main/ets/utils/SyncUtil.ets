@@ -77,7 +77,7 @@ export async function initCloudDB(): Promise<boolean> {
             objectTypeName: 'SyncToken',
             permissions: [
               { role: 'World', rights: [] },
-              { role: 'Authenticated', rights: [] },
+              { role: 'Authenticated', rights: ['Read', 'Upsert', 'Delete'] },
               { role: 'Creator', rights: ['Read', 'Upsert', 'Delete'] },
               { role: 'Administrator', rights: ['Read', 'Upsert', 'Delete'] }
             ]
@@ -100,6 +100,9 @@ export async function addToken(token: SyncToken): Promise<void> {
   if (!tokenCollection) {
     throw new Error('Cloud DB not initialized');
   }
+  if (!currentUserId) {
+    throw new Error('Cloud user not identified');
+  }
   try {
     await tokenCollection.upsert(buildRecord(token));
     console.log('[SyncUtil] addToken success:', token.id);
@@ -117,6 +120,9 @@ export async function updateToken(token: SyncToken): Promise<void> {
 export async function softDeleteToken(token: SyncToken): Promise<void> {
   if (!tokenCollection) {
     throw new Error('Cloud DB not initialized');
+  }
+  if (!currentUserId) {
+    throw new Error('Cloud user not identified');
   }
   try {
     const deleted: SyncToken = {
@@ -141,6 +147,9 @@ export async function softDeleteToken(token: SyncToken): Promise<void> {
 export async function restoreToken(token: SyncToken): Promise<void> {
   if (!tokenCollection) {
     throw new Error('Cloud DB not initialized');
+  }
+  if (!currentUserId) {
+    throw new Error('Cloud user not identified');
   }
   try {
     const restored: SyncToken = {
@@ -170,12 +179,16 @@ export async function sync(localTokens: SyncToken[], isMember: boolean): Promise
     console.error('[SyncUtil] sync failed: Cloud DB not initialized');
     return localTokens;
   }
+  if (!currentUserId) {
+    console.error('[SyncUtil] sync failed: cloud user not identified');
+    return localTokens;
+  }
 
   try {
     console.log('[SyncUtil] sync started, local tokens:', localTokens.length);
 
     const cloudRecords: SyncTokenRecord[] =
-      await tokenCollection.query().equalTo('is_deleted', false).get();
+      await tokenCollection.query().equalTo('is_deleted', false).equalTo('userId', currentUserId).get();
     const cloudTokens: SyncToken[] = cloudRecords.map((r: SyncTokenRecord): SyncToken => recordToToken(r));
 
     const toUpload: SyncTokenRecord[] = [];
