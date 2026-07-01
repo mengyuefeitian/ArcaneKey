@@ -203,24 +203,25 @@ export function decryptData(enc: string, pass: string): object[] {
   return JSON.parse(utf8Decode(jsonBytes)) as object[];
 }
 
-// ── 云同步专用：确定性密钥加密（unionID 派生固定密钥，无随机 salt） ──
-// 与 encryptData/decryptData 不同：同一账号对同一 secret 每次加密结果必须一致，
+// ── 云同步专用：按记录+字段派生密钥加密（unionID + recordId + fieldName，无随机 salt） ──
+// 与 encryptData/decryptData 不同：同一账号对同一 (recordId, fieldName) 每次加密结果必须一致，
 // 供 SyncUtil.sync() 按 secret 做本地/云端去重比对（比对时用解密后的明文）。
-export function encryptSecretForCloud(secret: string, unionId: string): string {
-  const salt = utf8Encode('ArcaneKey-cloud-sync-v1');
+// recordId + fieldName 参与派生是为了避免同一账号下所有记录/字段共用同一个密钥流（多次一密弱点）。
+export function encryptFieldForCloud(value: string, unionId: string, recordId: string, fieldName: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1:' + recordId + ':' + fieldName);
   const key = pbkdf2(unionId, salt, 10000, 32);
-  const secretBytes = utf8Encode(secret);
+  const valueBytes = utf8Encode(value);
   const xored: number[] = [];
-  for (let i = 0; i < secretBytes.length; i++) {
-    xored.push(secretBytes[i] ^ key[i % 32]);
+  for (let i = 0; i < valueBytes.length; i++) {
+    xored.push(valueBytes[i] ^ key[i % 32]);
   }
   const arr = new Uint8Array(xored);
   const helper = new util.Base64Helper();
   return helper.encodeToStringSync(arr);
 }
 
-export function decryptSecretFromCloud(enc: string, unionId: string): string {
-  const salt = utf8Encode('ArcaneKey-cloud-sync-v1');
+export function decryptFieldForCloud(enc: string, unionId: string, recordId: string, fieldName: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1:' + recordId + ':' + fieldName);
   const key = pbkdf2(unionId, salt, 10000, 32);
   const helper = new util.Base64Helper();
   const decoded: Uint8Array = helper.decodeSync(enc);
