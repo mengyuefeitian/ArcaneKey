@@ -158,7 +158,17 @@ struct Index {
   }
 
   // ── Back navigation ─────────────────────────────────────────────
+  // Checks are ordered by overlay zIndex, highest first, so the system
+  // back-gesture always closes only the topmost overlay. The app only
+  // exits (returns false) when no overlay is open — i.e. at the true
+  // top level (home tab, no modals).
   onBackPress(): boolean {
+    // zIndex 999 — delete confirmation dialog can be open on top of EditModal
+    if (this.showDeleteConfirm) {
+      this.showDeleteConfirm = false;
+      return true;
+    }
+    // zIndex 400 — full-screen modals
     if (this.showAgreement || this.showPrivacy) {
       this.showAgreement = false;
       this.showPrivacy = false;
@@ -192,8 +202,16 @@ struct Index {
       this.showMembership = false;
       return true;
     }
-    if (this.showDeleteConfirm) {
-      this.showDeleteConfirm = false;
+    // zIndex 350 — QR export view (may sit on top of EditModal)
+    if (this.showQrToken !== null) {
+      this.showQrToken = null;
+      this.qrUri = '';
+      return true;
+    }
+    // zIndex 300 — Edit account modal
+    if (this.editToken.id) {
+      this.editToken = {} as Token;
+      this.confirmDelete = false;
       return true;
     }
     return false;
@@ -993,8 +1011,10 @@ struct Index {
                       encodeURIComponent(t.account) + '?secret=' + t.secret +
                       '&issuer=' + encodeURIComponent(t.brand);
                     this.showQrToken = t;
-                    this.editToken = {} as Token;
                     this.confirmDelete = false;
+                    // NOTE: editToken is intentionally left untouched so EditModal
+                    // stays mounted underneath QrModal (zIndex 300 vs 350) and
+                    // reappears when QrModal is closed.
                   })
                 }
               }.alignItems(VerticalAlign.Center)
