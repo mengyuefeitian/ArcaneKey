@@ -9,6 +9,11 @@ interface PurchasePayload {
   orderId?: string;
 }
 
+interface IapError {
+  code?: number;
+  message?: string;
+}
+
 export interface PurchaseTokenResult {
   purchaseToken: string;
   purchaseOrderId: string;
@@ -67,42 +72,55 @@ async function findPurchase(
   context: common.UIAbilityContext,
   queryType: iap.PurchaseQueryType
 ): Promise<PurchaseTokenResult | null> {
+  console.info(`[IAPUtil] findPurchase: querying queryType=${queryType}`);
   const result = await iap.queryPurchases(context, {
     productType: iap.ProductType.NONCONSUMABLE,
     queryType: queryType,
   });
+  const count = result.purchaseDataList ? result.purchaseDataList.length : 0;
+  console.info(`[IAPUtil] findPurchase: queryType=${queryType} returned ${count} record(s)`);
   if (!result.purchaseDataList || result.purchaseDataList.length === 0) {
     return null;
   }
   for (const data of result.purchaseDataList) {
     const payload = JSON.parse(data) as PurchasePayload;
+    console.info(`[IAPUtil] findPurchase: record productId=${payload.productId ?? 'empty'}`);
     if (payload.productId === MEMBER_PRODUCT_ID) {
+      console.info('[IAPUtil] findPurchase: matched MEMBER_PRODUCT_ID');
       return { purchaseToken: payload.purchaseToken ?? '', purchaseOrderId: payload.orderId ?? '' };
     }
   }
+  console.info(`[IAPUtil] findPurchase: queryType=${queryType} had no record matching MEMBER_PRODUCT_ID`);
   return null;
 }
 
 export async function restoreOwnedPurchases(
   context: common.UIAbilityContext
 ): Promise<PurchaseTokenResult | null> {
+  console.info('[IAPUtil] restoreOwnedPurchases: started');
   try {
     const entitled = await findPurchase(context, iap.PurchaseQueryType.CURRENT_ENTITLEMENT);
     if (entitled) {
+      console.info('[IAPUtil] restoreOwnedPurchases: found via CURRENT_ENTITLEMENT');
       return entitled;
     }
     // A purchase can be PRODUCT_OWNED at AGC but never show up as a CURRENT_ENTITLEMENT
     // if finishPurchase() was never successfully called on it (e.g. an earlier
     // acknowledgePurchase attempt failed silently). Finish it here so it becomes a
     // real entitlement, then return its token.
+    console.info('[IAPUtil] restoreOwnedPurchases: not found via CURRENT_ENTITLEMENT, trying UNFINISHED');
     const unfinished = await findPurchase(context, iap.PurchaseQueryType.UNFINISHED);
     if (unfinished) {
+      console.info('[IAPUtil] restoreOwnedPurchases: found via UNFINISHED, acknowledging');
       await acknowledgePurchase(context, unfinished.purchaseToken, unfinished.purchaseOrderId);
+      console.info('[IAPUtil] restoreOwnedPurchases: acknowledged successfully');
       return unfinished;
     }
+    console.info('[IAPUtil] restoreOwnedPurchases: no matching record found via either query type');
     return null;
   } catch (error) {
-    console.error('IAP restoreOwnedPurchases failed:', error);
+    const err = error as IapError;
+    console.error(`[IAPUtil] restoreOwnedPurchases failed: code=${err.code ?? 'unknown'} message=${err.message ?? JSON.stringify(error)}`);
     return null; // 恢复失败时返回 null，不抛出异常
   }
 }

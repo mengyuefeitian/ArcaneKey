@@ -744,6 +744,7 @@ struct Index {
   }
 
   private async buyMembership(): Promise<void> {
+    console.info('[Index] buyMembership called, isMember:', this.isMember, 'loggedIn:', this.loggedIn);
     if (!this.loggedIn) {
       this.showLogin = true;
       return;
@@ -769,18 +770,22 @@ struct Index {
       } else if (code === iap.IAPErrorCode.NETWORK_ERROR) {
         this.toast('网络异常，请检查网络后重试');
       } else if (code === iap.IAPErrorCode.PRODUCT_OWNED) {
+        console.info('[Index] buyMembership: PRODUCT_OWNED, calling restorePurchase');
         await this.restorePurchase();
       } else {
+        console.warn('[Index] buyMembership: unhandled error code', code);
         this.toast(`开通失败（${code ?? '未知'}），请重试`);
       }
     }
   }
 
   private async restorePurchase(): Promise<void> {
+    console.info('[Index] restorePurchase called');
     const ctx = AppStorage.get<common.UIAbilityContext>('context');
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
       const result = await restoreOwnedPurchases(ctx);
+      console.info('[Index] restorePurchase: restoreOwnedPurchases returned', result ? 'a token' : 'null');
       if (result) {
         const bound = this.userName || this.boundAccount;
         await saveMember(true, bound, this.userOpenId);
@@ -790,7 +795,8 @@ struct Index {
       } else {
         this.toast('未找到有效购买记录');
       }
-    } catch (_) {
+    } catch (e) {
+      console.error('[Index] restorePurchase failed:', (e as Error).message);
       this.toast('恢复失败，请检查网络后重试');
     }
   }
