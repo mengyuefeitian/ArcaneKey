@@ -68,7 +68,7 @@ export async function initCloudDB(): Promise<boolean> {
               { fieldName: 'deleted_at', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false, defaultValue: '' },
               { fieldName: 'timestamp', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
               { fieldName: 'is_deleted', fieldType: 'Boolean', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
-              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: true, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' }
+              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: true, notNull: true, isNeedEncrypt: false, isSensitive: false }
             ],
             indexes: []
           }
