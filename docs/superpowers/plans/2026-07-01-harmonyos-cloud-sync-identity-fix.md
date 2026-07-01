@@ -255,13 +255,17 @@ git commit -m "fix(harmonyos): filter cloud sync queries by unionID, relax permi
 
 - [ ] **Step 2: 修改权限规则**
 
+AGC 控制台的权限规则是一个矩阵表格：纵列是角色（所有人 World / 认证用户 Authenticated / 数据库创建人 Creator / 管理员 Administrator），横列是操作（query / upsert / delete）。不是"把 Creator 切换成 Authenticated"这种单选操作，而是：
+
 1. 打开 `SyncToken` 的 **权限规则** 配置
-2. 将当前"仅创建者可读写"（Creator: Read/Upsert/Delete）修改为"已登录用户可读写"（Authenticated: Read/Upsert/Delete）
-3. 保存配置
+2. **在"认证用户"（Authenticated）这一行，把 query、upsert、delete 三个格子都勾上**（对应代码里 `{ role: 'Authenticated', rights: ['Read', 'Upsert', 'Delete'] }`）
+3. **"数据库创建人"（Creator）这一行保持原样不动**（本来就是勾着的，代码里也保留了 `Creator` 的完整权限，两个角色是并存关系，不是替换关系）
+4. "所有人"（World）这一行不勾（保持无权限）
+5. 保存配置
 
 - [ ] **Step 3: 确认配置生效**
 
-在控制台的对象类型详情页确认权限规则显示为 `Authenticated: Read, Upsert, Delete`（而非 `Creator`）
+在控制台的对象类型详情页确认"认证用户"这一行的 query、upsert、delete 三个格子都已勾选，"数据库创建人"行保持不变
 
 ---
 
