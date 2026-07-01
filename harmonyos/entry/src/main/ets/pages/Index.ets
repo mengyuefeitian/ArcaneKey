@@ -161,12 +161,16 @@ struct Index {
   }
 
   private doCloudInit(): void {
-    initCloudDB().then(() => {
+    initCloudDB().then((ready: boolean) => {
+      if (!ready) {
+        console.error('[Index] deferred cloud DB init failed, skipping restore/auto-sync this session');
+        return Promise.resolve();
+      }
       setCloudUserId(this.userOpenId);
       console.log('[Index] cloud DB initialized (deferred after AGC auth)');
-      return this.cloudRestore();
-    }).then(() => {
-      this.startAutoSync();
+      return this.cloudRestore().then(() => {
+        this.startAutoSync();
+      });
     }).catch((e: Error) => {
       console.error('[Index] deferred cloud init failed:', e.message);
     });
@@ -323,7 +327,11 @@ struct Index {
   private async initCloudSyncIfReady(): Promise<void> {
     if (this.agcAuthReady_) {
       // AGC auth already finished — initialize cloud DB now
-      await initCloudDB();
+      const ready = await initCloudDB();
+      if (!ready) {
+        console.error('[Index] cloud DB init failed, skipping restore/auto-sync this session');
+        return;
+      }
       setCloudUserId(this.userOpenId);
       console.log('[Index] cloud DB initialized');
       await this.cloudRestore();
