@@ -656,8 +656,19 @@ struct Index {
     try {
       const data = decryptData(this.importText, this.importPw) as Token[];
       if (!Array.isArray(data)) throw new Error('invalid');
-      const ids = new Set(this.tokens.map((t: Token) => t.id));
-      const imported = data.filter((t: Token) => this.isValidToken(t as object) && !ids.has(t.id));
+      // Dedup by secret (same key addToken()/importFromUris() use), not id —
+      // a backup's token ids were generated on the device that created the
+      // backup and won't match ids of accounts already added locally via
+      // other paths, so id-based dedup let the same secret in twice.
+      const existingSecrets = new Set(this.tokens.map((t: Token) => t.secret.toUpperCase()));
+      const imported: Token[] = [];
+      for (const t of data) {
+        if (!this.isValidToken(t as object)) continue;
+        const s = t.secret.toUpperCase();
+        if (existingSecrets.has(s)) continue;
+        imported.push(t);
+        existingSecrets.add(s);
+      }
       this.tokens = this.tokens.concat(imported);
       saveTokens(this.tokens);
       this.refreshOtp();
