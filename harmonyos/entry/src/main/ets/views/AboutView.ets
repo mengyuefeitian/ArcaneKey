@@ -1,4 +1,4 @@
-import { common, Want } from '@kit.AbilityKit';
+import { common, Want, bundleManager } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 
 const AGREEMENT_TEXT: string = `用户协议
@@ -182,9 +182,17 @@ export struct AboutView {
   @Link showAgreement: boolean;
   @Link showPrivacy: boolean;
   @State emailCopied: boolean = false;
+  @State versionText: string = '星枢令';
   onClose: () => void = () => {};
 
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
+
+  aboutToAppear(): void {
+    try {
+      const info = bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
+      this.versionText = `星枢令 v${info.versionName}`;
+    } catch (_) {}
+  }
 
   private async openUrl(url: string): Promise<void> {
     try {
@@ -317,7 +325,7 @@ export struct AboutView {
             .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(18)
             .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
 
-            Text('星枢令 v1.0.0')
+            Text(this.versionText)
               .fontSize(12).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
               .width('100%').textAlign(TextAlign.Center)
               .padding({ top: 8, bottom: 100 })

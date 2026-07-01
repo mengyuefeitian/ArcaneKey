@@ -24,6 +24,8 @@ export struct ProfileView {
   onNavHide: () => void = () => {};
   onNavShow: () => void = () => {};
 
+  @State avatarLoadFailed: boolean = false;
+
   private scroller: Scroller = new Scroller();
   private lastScrollY: number = 0;
   private scrollTimer: number = -1;
@@ -37,10 +39,11 @@ export struct ProfileView {
         if (this.loggedIn) {
           Row({ space: 16 }) {
             // Avatar — large, prominent
-            if (this.userAvatar) {
+            if (this.userAvatar && !this.avatarLoadFailed) {
               Image(this.userAvatar)
                 .width(72).height(72).borderRadius(18)
                 .border({ width: 1, color: this.c('rgba(255,255,255,0.10)', 'rgba(0,0,0,0.06)') })
+                .onError(() => { this.avatarLoadFailed = true; })
             } else {
               Stack() {
                 Text(this.userName.length > 0 ? this.userName[0].toUpperCase() : 'U')
