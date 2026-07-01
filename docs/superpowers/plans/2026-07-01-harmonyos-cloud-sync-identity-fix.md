@@ -304,10 +304,182 @@ git commit -m "fix(harmonyos): filter cloud sync queries by unionID, relax permi
 
 ---
 
+## Task 5: CryptoUtil 新增云同步专用确定性加密函数
+
+> **追加背景（2026-07-01 最终整体分支 review 后）：** review 指出 Task 2 里权限从 `Creator` 放宽为 `Authenticated` 后，`secret` 字段仍是明文存储，相当于把 TOTP 密钥明文暴露给任何能匿名登录的客户端，是相对改动前的净安全降级。用户确认必须加密，且云同步是后台静默触发（无法每次弹密码框），决定用 `unionID` 派生确定性密钥，全程无需用户输入密码。详见设计文档"密钥加密与复合主键修正"一节。
+
+**Files:**
+- Modify: `harmonyos/entry/src/main/ets/utils/CryptoUtil.ets`（在文件末尾追加，第 204 行之后）
+
+**Interfaces:**
+- Consumes: 文件内已有的私有函数 `pbkdf2(password: string, salt: number[], iterations: number, keyLen: number): number[]`、`utf8Encode(str: string): number[]`、`utf8Decode(bytes: number[]): string`（均已在本文件顶部定义，无需改动，直接复用）；文件顶部已有的 `import { util } from '@kit.ArkTS';`（无需新增 import）
+- Produces: `encryptSecretForCloud(secret: string, unionId: string): string`、`decryptSecretFromCloud(enc: string, unionId: string): string` — 供 Task 6 在 `SyncUtil.ets` 中调用
+
+**Rationale:** 复用本文件已有的 PBKDF2/UTF-8 私有辅助函数，避免重复实现哈希/编码逻辑（DRY）。与 `encryptData`/`decryptData`（备份导出用，随机 salt）不同，这里**故意不用随机 salt**——因为要保证同一账号对同一个 `secret` 每次加密结果一致，否则会破坏 `SyncUtil.ets` 的 `sync()` 里靠 `secret` 字段做本地/云端去重比对的逻辑（该逻辑在 Task 6 里保持不变，比较的是解密后的明文）。
+
+- [ ] **Step 1: 在文件末尾追加加解密函数**
+
+在 `harmonyos/entry/src/main/ets/utils/CryptoUtil.ets` 文件末尾（第 204 行 `decryptData` 函数结束的 `}` 之后）追加：
+
+```typescript
+
+// ── 云同步专用：确定性密钥加密（unionID 派生固定密钥，无随机 salt） ──
+// 与 encryptData/decryptData 不同：同一账号对同一 secret 每次加密结果必须一致，
+// 供 SyncUtil.sync() 按 secret 做本地/云端去重比对（比对时用解密后的明文）。
+export function encryptSecretForCloud(secret: string, unionId: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1');
+  const key = pbkdf2(unionId, salt, 10000, 32);
+  const secretBytes = utf8Encode(secret);
+  const xored: number[] = [];
+  for (let i = 0; i < secretBytes.length; i++) {
+    xored.push(secretBytes[i] ^ key[i % 32]);
+  }
+  const arr = new Uint8Array(xored);
+  const helper = new util.Base64Helper();
+  return helper.encodeToStringSync(arr);
+}
+
+export function decryptSecretFromCloud(enc: string, unionId: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1');
+  const key = pbkdf2(unionId, salt, 10000, 32);
+  const helper = new util.Base64Helper();
+  const decoded: Uint8Array = helper.decodeSync(enc);
+  const plain: number[] = [];
+  for (let i = 0; i < decoded.length; i++) {
+    plain.push(decoded[i] ^ key[i % 32]);
+  }
+  return utf8Decode(plain);
+}
+```
+
+- [ ] **Step 2: 编译验证**
+
+Run:
+```bash
+cd harmonyos && DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+  /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+  --mode project -p product=default assembleApp --analyze=normal --parallel --incremental --daemon
+```
+Expected: `BUILD SUCCESSFUL`，无 ArkTS 编译错误
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add harmonyos/entry/src/main/ets/utils/CryptoUtil.ets
+git commit -m "feat(harmonyos): add deterministic unionID-derived encryption for cloud-synced secrets"
+```
+
+---
+
+## Task 6: SyncUtil 加密 secret 字段并改为复合主键
+
+**Files:**
+- Modify: `harmonyos/entry/src/main/ets/utils/SyncUtil.ets`
+
+**Interfaces:**
+- Consumes: `encryptSecretForCloud(secret: string, unionId: string): string`、`decryptSecretFromCloud(enc: string, unionId: string): string`（Task 5 产出，从 `./CryptoUtil` 导入）
+- Produces: `buildRecord`/`recordToToken`/`initCloudDB` 内部行为变化；`addToken`/`softDeleteToken`/`restoreToken`/`sync` 四个导出函数签名不变
+
+**Rationale:** 把加解密收敛在 `buildRecord`（上传前加密）/`recordToToken`（下载后解密）这两个云端序列化边界函数里，`SyncToken`/`Token` 在 App 内其余逻辑（OTP 生成、`sync()` 内部按 `secret` 去重比对）拿到的始终是明文，改动面最小。同时把 `userId` 字段标记为主键的一部分，组成复合主键 `(userId, secret密文)`，防止不同用户 upsert 相同 `secret` 时互相覆盖对方记录（`Authenticated` 权限放宽后，原先靠 `Creator` 权限间接挡住的跨用户覆盖不再被数据库拦截，必须靠主键设计本身解决）。
+
+- [ ] **Step 1: 导入 Task 5 新增的函数**
+
+在 `harmonyos/entry/src/main/ets/utils/SyncUtil.ets` 文件顶部导入区域（第 1-3 行）追加一行：
+
+```typescript
+import cloud from '@hw-agconnect/cloud';
+import { DatabaseCollection } from '@hw-agconnect/cloud';
+import { SyncToken } from '../model/Token';
+import { encryptSecretForCloud, decryptSecretFromCloud } from './CryptoUtil';
+```
+
+- [ ] **Step 2: buildRecord 上传前加密 secret**
+
+将 `buildRecord` 函数（第 24-35 行）中的 `r.secret = token.secret;` 一行替换为：
+
+```typescript
+  r.secret = encryptSecretForCloud(token.secret, currentUserId);
+```
+
+（函数其余行不变）
+
+- [ ] **Step 3: recordToToken 下载后解密 secret**
+
+将 `recordToToken` 函数（第 37-48 行）中的 `secret: r.secret,` 一行替换为：
+
+```typescript
+    secret: decryptSecretFromCloud(r.secret, currentUserId),
+```
+
+（函数其余行不变）
+
+- [ ] **Step 4: schema 里把 userId 标记为主键的一部分**
+
+将 `initCloudDB` 里 `fields` 数组（第 62-71 行）中 `userId` 那一行：
+
+```typescript
+              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' }
+```
+
+替换为：
+
+```typescript
+              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: true, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' }
+```
+
+（`secret` 字段那一行保留原有的 `belongPrimaryKey: true` 不变，两个字段共同组成复合主键）
+
+- [ ] **Step 5: 编译验证**
+
+Run:
+```bash
+cd harmonyos && DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+  /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+  --mode project -p product=default assembleApp --analyze=normal --parallel --incremental --daemon
+```
+Expected: `BUILD SUCCESSFUL`，无 ArkTS 编译错误
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add harmonyos/entry/src/main/ets/utils/SyncUtil.ets
+git commit -m "fix(harmonyos): encrypt synced secrets with unionID-derived key, use composite primary key"
+```
+
+---
+
+## Task 7: AGC 控制台 schema 更新为复合主键（人工步骤，无代码）
+
+**Files:** 无（纯控制台操作）
+
+**Interfaces:**
+- Consumes: Task 6 提交的 schema 声明变化
+- Produces: AGC 云数据库 `SyncToken` 对象类型的主键定义变更，供 Task 6 的代码在真实环境中生效
+
+**Rationale:** 和 Task 3 的权限规则一样，`initCloudDB()` 里的 `fields` 声明只是客户端本地 schema 描述，真正的主键约束需要在 AGC 控制台的对象类型定义里同步修改，否则服务端仍然只按 `secret` 单字段去重/去重复。
+
+- [ ] **Step 1: 登录 AGC 控制台，定位对象类型**
+
+同 Task 3 Step 1：项目 `101653523864182539`，应用 `com.arcanekey.authenticator`，云数据库 → 对象类型 → `SyncToken`
+
+- [ ] **Step 2: 修改主键定义**
+
+将 `userId` 字段也勾选为主键的一部分，与现有的 `secret` 字段共同组成复合主键 `(userId, secret)`
+
+- [ ] **Step 3: 确认配置生效**
+
+在控制台对象类型详情页确认主键显示为复合主键（包含 `userId` 和 `secret` 两个字段）
+
+---
+
 ## 验收标准
 
-- [ ] Task 1、Task 2 编译均通过（`BUILD SUCCESSFUL`，无 ArkTS 错误）
-- [ ] AGC 控制台 `SyncToken` 权限规则已改为 `Authenticated`
+- [ ] Task 1、Task 2、Task 5、Task 6 编译均通过（`BUILD SUCCESSFUL`，无 ArkTS 错误）
+- [ ] AGC 控制台 `SyncToken` 权限规则已改为 `Authenticated`（Task 3）
+- [ ] AGC 控制台 `SyncToken` 主键已改为复合主键 `(userId, secret)`（Task 7）
 - [ ] 真机验证：同一华为账号换设备后，此前同步的口令可见
 - [ ] 软删除跨设备同步正常
 - [ ] 非会员/未登录状态不触发任何云端调用
+- [ ] 云端存储的 `secret` 字段为密文，不是明文 TOTP 密钥
