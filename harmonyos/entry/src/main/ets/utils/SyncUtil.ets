@@ -1,6 +1,7 @@
 import cloud from '@hw-agconnect/cloud';
 import { DatabaseCollection } from '@hw-agconnect/cloud';
 import { SyncToken } from '../model/Token';
+import { encryptSecretForCloud, decryptSecretFromCloud } from './CryptoUtil';
 
 const ZONE_NAME = 'ArcaneKey';
 const SYNC_INTERVAL_MS = 30 * 60 * 1000;
@@ -26,7 +27,7 @@ function buildRecord(token: SyncToken): SyncTokenRecord {
   r.id = token.id;
   r.brand = token.brand;
   r.account = token.account;
-  r.secret = token.secret;
+  r.secret = encryptSecretForCloud(token.secret, currentUserId);
   r.is_deleted = token.is_deleted ?? false;
   r.deleted_at = token.deleted_at ?? '';
   r.timestamp = new Date().toISOString();
@@ -39,7 +40,7 @@ function recordToToken(r: SyncTokenRecord): SyncToken {
     id: r.id,
     brand: r.brand,
     account: r.account,
-    secret: r.secret,
+    secret: decryptSecretFromCloud(r.secret, currentUserId),
     is_deleted: r.is_deleted,
     deleted_at: r.deleted_at,
     timestamp: r.timestamp,
@@ -67,7 +68,7 @@ export async function initCloudDB(): Promise<boolean> {
               { fieldName: 'deleted_at', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false, defaultValue: '' },
               { fieldName: 'timestamp', fieldType: 'String', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
               { fieldName: 'is_deleted', fieldType: 'Boolean', belongPrimaryKey: false, notNull: false, isNeedEncrypt: false, isSensitive: false },
-              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' }
+              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: true, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' }
             ],
             indexes: []
           }
