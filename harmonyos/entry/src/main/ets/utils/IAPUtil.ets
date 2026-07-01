@@ -63,23 +63,42 @@ export async function acknowledgePurchase(
   }
 }
 
+async function findPurchase(
+  context: common.UIAbilityContext,
+  queryType: iap.PurchaseQueryType
+): Promise<PurchaseTokenResult | null> {
+  const result = await iap.queryPurchases(context, {
+    productType: iap.ProductType.NONCONSUMABLE,
+    queryType: queryType,
+  });
+  if (!result.purchaseDataList || result.purchaseDataList.length === 0) {
+    return null;
+  }
+  for (const data of result.purchaseDataList) {
+    const payload = JSON.parse(data) as PurchasePayload;
+    if (payload.productId === MEMBER_PRODUCT_ID) {
+      return { purchaseToken: payload.purchaseToken ?? '', purchaseOrderId: payload.orderId ?? '' };
+    }
+  }
+  return null;
+}
+
 export async function restoreOwnedPurchases(
   context: common.UIAbilityContext
 ): Promise<PurchaseTokenResult | null> {
   try {
-    const result = await iap.queryPurchases(context, {
-      productType: iap.ProductType.NONCONSUMABLE,
-      queryType: iap.PurchaseQueryType.CURRENT_ENTITLEMENT,
-    });
-    if (!result.purchaseDataList || result.purchaseDataList.length === 0) {
-      return null;
+    const entitled = await findPurchase(context, iap.PurchaseQueryType.CURRENT_ENTITLEMENT);
+    if (entitled) {
+      return entitled;
     }
-    for (const data of result.purchaseDataList) {
-      const payload = JSON.parse(data) as PurchasePayload;
-      if (payload.productId === MEMBER_PRODUCT_ID) {
-        const token: PurchaseTokenResult = { purchaseToken: payload.purchaseToken ?? '', purchaseOrderId: payload.orderId ?? '' };
-        return token;
-      }
+    // A purchase can be PRODUCT_OWNED at AGC but never show up as a CURRENT_ENTITLEMENT
+    // if finishPurchase() was never successfully called on it (e.g. an earlier
+    // acknowledgePurchase attempt failed silently). Finish it here so it becomes a
+    // real entitlement, then return its token.
+    const unfinished = await findPurchase(context, iap.PurchaseQueryType.UNFINISHED);
+    if (unfinished) {
+      await acknowledgePurchase(context, unfinished.purchaseToken, unfinished.purchaseOrderId);
+      return unfinished;
     }
     return null;
   } catch (error) {
