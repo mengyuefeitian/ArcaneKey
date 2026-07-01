@@ -284,18 +284,7 @@ struct Index {
 
       this.refreshOtp();
       if (this.isMember) {
-        if (this.agcAuthReady_) {
-          // AGC auth already finished — initialize cloud DB now
-          await initCloudDB();
-          setCloudUserId(this.userOpenId);
-          console.log('[Index] cloud DB initialized');
-          await this.cloudRestore();
-          this.startAutoSync();
-        } else {
-          // AGC auth still in flight — onAgcAuthReady() will handle init once it completes
-          this.pendingCloudInit = true;
-          console.log('[Index] cloud DB init deferred (waiting for AGC auth)');
-        }
+        await this.initCloudSyncIfReady();
       } else {
         try {
           const restored = await restoreOwnedPurchases(ctx);
@@ -306,11 +295,30 @@ struct Index {
             }
             this.isMember = true;
             this.boundAccount = member.boundAccount;
+            await this.initCloudSyncIfReady();
           }
         } catch (_) {}
       }
     } catch (_) {
       this.tokens = INITIAL_TOKENS.slice();
+    }
+  }
+
+  // Shared by loadData()'s two membership-detection paths (already-flagged member,
+  // and auto-restored via restoreOwnedPurchases on a fresh install) so both trigger
+  // cloud DB init/restore identically instead of only one of them.
+  private async initCloudSyncIfReady(): Promise<void> {
+    if (this.agcAuthReady_) {
+      // AGC auth already finished — initialize cloud DB now
+      await initCloudDB();
+      setCloudUserId(this.userOpenId);
+      console.log('[Index] cloud DB initialized');
+      await this.cloudRestore();
+      this.startAutoSync();
+    } else {
+      // AGC auth still in flight — onAgcAuthReady() will handle init once it completes
+      this.pendingCloudInit = true;
+      console.log('[Index] cloud DB init deferred (waiting for AGC auth)');
     }
   }
 
