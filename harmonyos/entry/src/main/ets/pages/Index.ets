@@ -770,7 +770,12 @@ struct Index {
       } else if (code === iap.IAPErrorCode.NETWORK_ERROR) {
         this.toast('网络异常，请检查网络后重试');
       } else if (code === iap.IAPErrorCode.PRODUCT_OWNED) {
-        console.info('[Index] buyMembership: PRODUCT_OWNED, calling restorePurchase');
+        // The just-failed createPurchase()'s cashier UIExtension session is still
+        // tearing down at this point; calling queryPurchases() immediately hangs
+        // with no resolve/reject (observed on real device). Give it a moment.
+        console.info('[Index] buyMembership: PRODUCT_OWNED, waiting before restorePurchase');
+        await new Promise<void>((resolve) => setTimeout(resolve, 800));
+        console.info('[Index] buyMembership: calling restorePurchase');
         await this.restorePurchase();
       } else {
         console.warn('[Index] buyMembership: unhandled error code', code);
