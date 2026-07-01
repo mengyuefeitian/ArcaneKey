@@ -83,6 +83,7 @@ async function findPurchase(
     return null;
   }
   for (const data of result.purchaseDataList) {
+    console.info(`[IAPUtil] findPurchase: raw record=${data}`);
     const payload = JSON.parse(data) as PurchasePayload;
     console.info(`[IAPUtil] findPurchase: record productId=${payload.productId ?? 'empty'}`);
     if (payload.productId === MEMBER_PRODUCT_ID) {
