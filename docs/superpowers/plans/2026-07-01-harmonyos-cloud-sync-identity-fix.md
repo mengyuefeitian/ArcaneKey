@@ -255,13 +255,17 @@ git commit -m "fix(harmonyos): filter cloud sync queries by unionID, relax permi
 
 - [ ] **Step 2: 修改权限规则**
 
+AGC 控制台的权限规则是一个矩阵表格：纵列是角色（所有人 World / 认证用户 Authenticated / 数据库创建人 Creator / 管理员 Administrator），横列是操作（query / upsert / delete）。不是"把 Creator 切换成 Authenticated"这种单选操作，而是：
+
 1. 打开 `SyncToken` 的 **权限规则** 配置
-2. 将当前"仅创建者可读写"（Creator: Read/Upsert/Delete）修改为"已登录用户可读写"（Authenticated: Read/Upsert/Delete）
-3. 保存配置
+2. **在"认证用户"（Authenticated）这一行，把 query、upsert、delete 三个格子都勾上**（对应代码里 `{ role: 'Authenticated', rights: ['Read', 'Upsert', 'Delete'] }`）
+3. **"数据库创建人"（Creator）这一行保持原样不动**（本来就是勾着的，代码里也保留了 `Creator` 的完整权限，两个角色是并存关系，不是替换关系）
+4. "所有人"（World）这一行不勾（保持无权限）
+5. 保存配置
 
 - [ ] **Step 3: 确认配置生效**
 
-在控制台的对象类型详情页确认权限规则显示为 `Authenticated: Read, Upsert, Delete`（而非 `Creator`）
+在控制台的对象类型详情页确认"认证用户"这一行的 query、upsert、delete 三个格子都已勾选，"数据库创建人"行保持不变
 
 ---
 
@@ -304,10 +308,334 @@ git commit -m "fix(harmonyos): filter cloud sync queries by unionID, relax permi
 
 ---
 
+## Task 5: CryptoUtil 新增云同步专用确定性加密函数
+
+> **追加背景（2026-07-01 最终整体分支 review 后）：** review 指出 Task 2 里权限从 `Creator` 放宽为 `Authenticated` 后，`secret` 字段仍是明文存储，相当于把 TOTP 密钥明文暴露给任何能匿名登录的客户端，是相对改动前的净安全降级。用户确认必须加密，且云同步是后台静默触发（无法每次弹密码框），决定用 `unionID` 派生确定性密钥，全程无需用户输入密码。详见设计文档"密钥加密与复合主键修正"一节。
+
+**Files:**
+- Modify: `harmonyos/entry/src/main/ets/utils/CryptoUtil.ets`（在文件末尾追加，第 204 行之后）
+
+**Interfaces:**
+- Consumes: 文件内已有的私有函数 `pbkdf2(password: string, salt: number[], iterations: number, keyLen: number): number[]`、`utf8Encode(str: string): number[]`、`utf8Decode(bytes: number[]): string`（均已在本文件顶部定义，无需改动，直接复用）；文件顶部已有的 `import { util } from '@kit.ArkTS';`（无需新增 import）
+- Produces: `encryptSecretForCloud(secret: string, unionId: string): string`、`decryptSecretFromCloud(enc: string, unionId: string): string` — 供 Task 6 在 `SyncUtil.ets` 中调用
+
+**Rationale:** 复用本文件已有的 PBKDF2/UTF-8 私有辅助函数，避免重复实现哈希/编码逻辑（DRY）。与 `encryptData`/`decryptData`（备份导出用，随机 salt）不同，这里**故意不用随机 salt**——因为要保证同一账号对同一个 `secret` 每次加密结果一致，否则会破坏 `SyncUtil.ets` 的 `sync()` 里靠 `secret` 字段做本地/云端去重比对的逻辑（该逻辑在 Task 6 里保持不变，比较的是解密后的明文）。
+
+- [ ] **Step 1: 在文件末尾追加加解密函数**
+
+在 `harmonyos/entry/src/main/ets/utils/CryptoUtil.ets` 文件末尾（第 204 行 `decryptData` 函数结束的 `}` 之后）追加：
+
+```typescript
+
+// ── 云同步专用：确定性密钥加密（unionID 派生固定密钥，无随机 salt） ──
+// 与 encryptData/decryptData 不同：同一账号对同一 secret 每次加密结果必须一致，
+// 供 SyncUtil.sync() 按 secret 做本地/云端去重比对（比对时用解密后的明文）。
+export function encryptSecretForCloud(secret: string, unionId: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1');
+  const key = pbkdf2(unionId, salt, 10000, 32);
+  const secretBytes = utf8Encode(secret);
+  const xored: number[] = [];
+  for (let i = 0; i < secretBytes.length; i++) {
+    xored.push(secretBytes[i] ^ key[i % 32]);
+  }
+  const arr = new Uint8Array(xored);
+  const helper = new util.Base64Helper();
+  return helper.encodeToStringSync(arr);
+}
+
+export function decryptSecretFromCloud(enc: string, unionId: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1');
+  const key = pbkdf2(unionId, salt, 10000, 32);
+  const helper = new util.Base64Helper();
+  const decoded: Uint8Array = helper.decodeSync(enc);
+  const plain: number[] = [];
+  for (let i = 0; i < decoded.length; i++) {
+    plain.push(decoded[i] ^ key[i % 32]);
+  }
+  return utf8Decode(plain);
+}
+```
+
+- [ ] **Step 2: 编译验证**
+
+Run:
+```bash
+cd harmonyos && DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+  /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+  --mode project -p product=default assembleApp --analyze=normal --parallel --incremental --daemon
+```
+Expected: `BUILD SUCCESSFUL`，无 ArkTS 编译错误
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add harmonyos/entry/src/main/ets/utils/CryptoUtil.ets
+git commit -m "feat(harmonyos): add deterministic unionID-derived encryption for cloud-synced secrets"
+```
+
+---
+
+## Task 6: SyncUtil 加密 secret 字段并改为复合主键
+
+**Files:**
+- Modify: `harmonyos/entry/src/main/ets/utils/SyncUtil.ets`
+
+**Interfaces:**
+- Consumes: `encryptSecretForCloud(secret: string, unionId: string): string`、`decryptSecretFromCloud(enc: string, unionId: string): string`（Task 5 产出，从 `./CryptoUtil` 导入）
+- Produces: `buildRecord`/`recordToToken`/`initCloudDB` 内部行为变化；`addToken`/`softDeleteToken`/`restoreToken`/`sync` 四个导出函数签名不变
+
+**Rationale:** 把加解密收敛在 `buildRecord`（上传前加密）/`recordToToken`（下载后解密）这两个云端序列化边界函数里，`SyncToken`/`Token` 在 App 内其余逻辑（OTP 生成、`sync()` 内部按 `secret` 去重比对）拿到的始终是明文，改动面最小。同时把 `userId` 字段标记为主键的一部分，组成复合主键 `(userId, secret密文)`，防止不同用户 upsert 相同 `secret` 时互相覆盖对方记录（`Authenticated` 权限放宽后，原先靠 `Creator` 权限间接挡住的跨用户覆盖不再被数据库拦截，必须靠主键设计本身解决）。
+
+- [ ] **Step 1: 导入 Task 5 新增的函数**
+
+在 `harmonyos/entry/src/main/ets/utils/SyncUtil.ets` 文件顶部导入区域（第 1-3 行）追加一行：
+
+```typescript
+import cloud from '@hw-agconnect/cloud';
+import { DatabaseCollection } from '@hw-agconnect/cloud';
+import { SyncToken } from '../model/Token';
+import { encryptSecretForCloud, decryptSecretFromCloud } from './CryptoUtil';
+```
+
+- [ ] **Step 2: buildRecord 上传前加密 secret**
+
+将 `buildRecord` 函数（第 24-35 行）中的 `r.secret = token.secret;` 一行替换为：
+
+```typescript
+  r.secret = encryptSecretForCloud(token.secret, currentUserId);
+```
+
+（函数其余行不变）
+
+- [ ] **Step 3: recordToToken 下载后解密 secret**
+
+将 `recordToToken` 函数（第 37-48 行）中的 `secret: r.secret,` 一行替换为：
+
+```typescript
+    secret: decryptSecretFromCloud(r.secret, currentUserId),
+```
+
+（函数其余行不变）
+
+- [ ] **Step 4: schema 里把 userId 标记为主键的一部分**
+
+将 `initCloudDB` 里 `fields` 数组（第 62-71 行）中 `userId` 那一行：
+
+```typescript
+              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: false, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' }
+```
+
+替换为：
+
+```typescript
+              { fieldName: 'userId', fieldType: 'String', belongPrimaryKey: true, notNull: true, isNeedEncrypt: false, isSensitive: false, defaultValue: '' }
+```
+
+（`secret` 字段那一行保留原有的 `belongPrimaryKey: true` 不变，两个字段共同组成复合主键）
+
+- [ ] **Step 5: 编译验证**
+
+Run:
+```bash
+cd harmonyos && DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+  /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+  --mode project -p product=default assembleApp --analyze=normal --parallel --incremental --daemon
+```
+Expected: `BUILD SUCCESSFUL`，无 ArkTS 编译错误
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add harmonyos/entry/src/main/ets/utils/SyncUtil.ets
+git commit -m "fix(harmonyos): encrypt synced secrets with unionID-derived key, use composite primary key"
+```
+
+---
+
+## Task 7: AGC 控制台 schema 更新为复合主键（人工步骤，无代码）
+
+**Files:** 无（纯控制台操作）
+
+**Interfaces:**
+- Consumes: Task 6 提交的 schema 声明变化
+- Produces: AGC 云数据库 `SyncToken` 对象类型的主键定义变更，供 Task 6 的代码在真实环境中生效
+
+**Rationale:** 和 Task 3 的权限规则一样，`initCloudDB()` 里的 `fields` 声明只是客户端本地 schema 描述，真正的主键约束需要在 AGC 控制台的对象类型定义里同步修改，否则服务端仍然只按 `secret` 单字段去重/去重复。
+
+- [ ] **Step 1: 登录 AGC 控制台，定位对象类型**
+
+同 Task 3 Step 1：项目 `101653523864182539`，应用 `com.arcanekey.authenticator`，云数据库 → 对象类型 → `SyncToken`
+
+- [ ] **Step 2: 修改主键定义**
+
+将 `userId` 字段也勾选为主键的一部分，与现有的 `secret` 字段共同组成复合主键 `(userId, secret)`
+
+- [ ] **Step 3: 确认配置生效**
+
+在控制台对象类型详情页确认主键显示为复合主键（包含 `userId` 和 `secret` 两个字段）
+
+---
+
+## Task 8: CryptoUtil 加密函数泛化为按记录/字段派生密钥
+
+> **追加背景（2026-07-01 第二轮整体分支 review 后）：** review 指出 Task 5 的 `encryptSecretForCloud`/`decryptSecretFromCloud` 对同一账号所有记录都用同一个固定密钥做异或，是"多次一密"（many-time pad）弱点——`密文1 ⊕ 密文2 = 明文1 ⊕ 明文2`，结合 TOTP 密钥的 Base32 字符集和明文的 `account`/`brand` 上下文，存在 crib-dragging 风险。用户确认要修，方案是把 salt 派生从只用固定字符串，改成 `固定字符串 + recordId + fieldName`，让同一账号下不同记录、同一记录内不同字段都不复用密钥流，同时保持"同一 `(recordId, fieldName)` 每次加密结果一致"（供主键稳定性和 `sync()` 去重逻辑使用）。详见设计文档"密钥复用与元数据加密修正"一节。
+
+**Files:**
+- Modify: `harmonyos/entry/src/main/ets/utils/CryptoUtil.ets`（替换 Task 5 追加的 `encryptSecretForCloud`/`decryptSecretFromCloud`，第 206-232 行）
+
+**Interfaces:**
+- Consumes: 文件内已有的私有函数 `pbkdf2`、`utf8Encode`、`utf8Decode`（不变）
+- Produces: `encryptFieldForCloud(value: string, unionId: string, recordId: string, fieldName: string): string`、`decryptFieldForCloud(enc: string, unionId: string, recordId: string, fieldName: string): string` — 替代 Task 5 的 `encryptSecretForCloud`/`decryptSecretFromCloud`，供 Task 9 在 `SyncUtil.ets` 中调用（`secret`/`account`/`brand` 三个字段都用这套函数）
+
+**Rationale:** 把 `recordId`（即 `token.id`，明文字段，加解密时都能拿到）和 `fieldName`（`'secret'`/`'account'`/`'brand'` 字面量）拼进 salt 参与 PBKDF2 派生，让每条记录的每个字段都有独立的密钥流，从根上消除多次一密问题，同时不引入随机性（不破坏确定性/去重/主键稳定性要求）。
+
+- [ ] **Step 1: 用泛化版本替换 Task 5 追加的两个函数**
+
+将 `harmonyos/entry/src/main/ets/utils/CryptoUtil.ets` 第 206-232 行（Task 5 追加的整段，从注释 `// ── 云同步专用：...` 开始，到 `decryptSecretFromCloud` 函数结尾的 `}` 为止）整段替换为：
+
+```typescript
+// ── 云同步专用：按记录+字段派生密钥加密（unionID + recordId + fieldName，无随机 salt） ──
+// 与 encryptData/decryptData 不同：同一账号对同一 (recordId, fieldName) 每次加密结果必须一致，
+// 供 SyncUtil.sync() 按 secret 做本地/云端去重比对（比对时用解密后的明文）。
+// recordId + fieldName 参与派生是为了避免同一账号下所有记录/字段共用同一个密钥流（多次一密弱点）。
+export function encryptFieldForCloud(value: string, unionId: string, recordId: string, fieldName: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1:' + recordId + ':' + fieldName);
+  const key = pbkdf2(unionId, salt, 10000, 32);
+  const valueBytes = utf8Encode(value);
+  const xored: number[] = [];
+  for (let i = 0; i < valueBytes.length; i++) {
+    xored.push(valueBytes[i] ^ key[i % 32]);
+  }
+  const arr = new Uint8Array(xored);
+  const helper = new util.Base64Helper();
+  return helper.encodeToStringSync(arr);
+}
+
+export function decryptFieldForCloud(enc: string, unionId: string, recordId: string, fieldName: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1:' + recordId + ':' + fieldName);
+  const key = pbkdf2(unionId, salt, 10000, 32);
+  const helper = new util.Base64Helper();
+  const decoded: Uint8Array = helper.decodeSync(enc);
+  const plain: number[] = [];
+  for (let i = 0; i < decoded.length; i++) {
+    plain.push(decoded[i] ^ key[i % 32]);
+  }
+  return utf8Decode(plain);
+}
+```
+
+- [ ] **Step 2: 编译验证**
+
+Run:
+```bash
+cd harmonyos && DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+  /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+  --mode project -p product=default assembleApp --analyze=normal --parallel --incremental --daemon
+```
+Expected: 此步骤会因为 `SyncUtil.ets` 还在调用旧的 `encryptSecretForCloud`/`decryptSecretFromCloud`（已被本步骤删除）而编译失败——这是预期的中间状态，Task 9 会修复调用方。**如果编译报的错不是"找不到 encryptSecretForCloud/decryptSecretFromCloud"这类符号缺失错误，而是其他错误，才需要停下来排查。**
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add harmonyos/entry/src/main/ets/utils/CryptoUtil.ets
+git commit -m "fix(harmonyos): derive per-record per-field cloud sync encryption key to avoid keystream reuse"
+```
+
+---
+
+## Task 9: SyncUtil 加密 account/brand 并适配新函数签名
+
+**Files:**
+- Modify: `harmonyos/entry/src/main/ets/utils/SyncUtil.ets`
+
+**Interfaces:**
+- Consumes: `encryptFieldForCloud(value: string, unionId: string, recordId: string, fieldName: string): string`、`decryptFieldForCloud(enc: string, unionId: string, recordId: string, fieldName: string): string`（Task 8 产出，从 `./CryptoUtil` 导入）
+- Produces: `buildRecord`/`recordToToken` 内部行为变化；四个导出函数签名不变
+
+**Rationale:** `account`（用户名/邮箱，PII）和 `brand`（服务名）字段在 Task 2 把权限放宽为 `Authenticated` 后也会被任何匿名客户端读到，第一轮修复只处理了 `secret`，这次一并加密，待遇与 `secret` 一致。同时把 Task 6 里对旧版 `encryptSecretForCloud`/`decryptSecretFromCloud` 的调用改成 Task 8 的新签名。
+
+- [ ] **Step 1: 更新 import**
+
+将 `harmonyos/entry/src/main/ets/utils/SyncUtil.ets` 第 4 行：
+
+```typescript
+import { encryptSecretForCloud, decryptSecretFromCloud } from './CryptoUtil';
+```
+
+替换为：
+
+```typescript
+import { encryptFieldForCloud, decryptFieldForCloud } from './CryptoUtil';
+```
+
+- [ ] **Step 2: buildRecord 加密 secret/account/brand**
+
+将 `buildRecord` 函数（当前第 25-36 行）整体替换为：
+
+```typescript
+function buildRecord(token: SyncToken): SyncTokenRecord {
+  const r = new SyncTokenRecord();
+  r.id = token.id;
+  r.brand = encryptFieldForCloud(token.brand, currentUserId, token.id, 'brand');
+  r.account = encryptFieldForCloud(token.account, currentUserId, token.id, 'account');
+  r.secret = encryptFieldForCloud(token.secret, currentUserId, token.id, 'secret');
+  r.is_deleted = token.is_deleted ?? false;
+  r.deleted_at = token.deleted_at ?? '';
+  r.timestamp = new Date().toISOString();
+  r.userId = currentUserId;
+  return r;
+}
+```
+
+- [ ] **Step 3: recordToToken 解密 secret/account/brand**
+
+将 `recordToToken` 函数（当前第 38-49 行）整体替换为：
+
+```typescript
+function recordToToken(r: SyncTokenRecord): SyncToken {
+  return {
+    id: r.id,
+    brand: decryptFieldForCloud(r.brand, currentUserId, r.id, 'brand'),
+    account: decryptFieldForCloud(r.account, currentUserId, r.id, 'account'),
+    secret: decryptFieldForCloud(r.secret, currentUserId, r.id, 'secret'),
+    is_deleted: r.is_deleted,
+    deleted_at: r.deleted_at,
+    timestamp: r.timestamp,
+    userId: r.userId
+  };
+}
+```
+
+- [ ] **Step 4: 编译验证**
+
+Run:
+```bash
+cd harmonyos && DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+  /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+  --mode project -p product=default assembleApp --analyze=normal --parallel --incremental --daemon
+```
+Expected: `BUILD SUCCESSFUL`，无 ArkTS 编译错误（此时 Task 8 遗留的符号缺失错误应已解决）
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add harmonyos/entry/src/main/ets/utils/SyncUtil.ets
+git commit -m "fix(harmonyos): encrypt account/brand fields for cloud sync, adopt per-field key derivation"
+```
+
+---
+
 ## 验收标准
 
-- [ ] Task 1、Task 2 编译均通过（`BUILD SUCCESSFUL`，无 ArkTS 错误）
-- [ ] AGC 控制台 `SyncToken` 权限规则已改为 `Authenticated`
+- [ ] Task 1、Task 2、Task 5、Task 6、Task 8、Task 9 编译均通过（`BUILD SUCCESSFUL`，无 ArkTS 错误；Task 8 单独验证时的符号缺失错误除外，见 Task 8 Step 2 说明）
+- [ ] AGC 控制台 `SyncToken` 权限规则已改为 `Authenticated`（Task 3）
+- [ ] AGC 控制台 `SyncToken` 主键已改为复合主键 `(userId, secret)`（Task 7）
 - [ ] 真机验证：同一华为账号换设备后，此前同步的口令可见
 - [ ] 软删除跨设备同步正常
 - [ ] 非会员/未登录状态不触发任何云端调用
+- [ ] 云端存储的 `secret`、`account`、`brand` 字段均为密文，不是明文
+- [ ] 同一账号下不同记录/不同字段的加密密钥流不复用（Task 8 的 salt 派生已包含 recordId + fieldName）

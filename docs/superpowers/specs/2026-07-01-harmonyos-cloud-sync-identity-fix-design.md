@@ -36,7 +36,7 @@ Cloud DB 权限规则 → Creator 改为 Authenticated (Read/Upsert/Delete)
 
 | 文件 | 改动 |
 |---|---|
-| `harmonyos/entry/src/main/ets/pages/Index.ets`（`doHarmonyLogin`） | `request.scopes` 由 `['profile']` 改为 `['openid', 'profile']`；改用 `cred?.unionId` 而非 `cred?.openID`，传给 `setCloudUserId()` 和 `saveLogin()` |
+| `harmonyos/entry/src/main/ets/pages/Index.ets`（`doHarmonyLogin`） | `request.scopes` 由 `['profile']` 改为 `['openid', 'profile']`；改用 `cred?.unionID` 而非 `cred?.openID`，传给 `setCloudUserId()` 和 `saveLogin()` |
 | `harmonyos/entry/src/main/ets/utils/SyncUtil.ets` | `sync()` 的云端查询加上 `.equalTo('userId', currentUserId)`；`addToken`/`softDeleteToken`/`restoreToken` 在 `currentUserId` 为空时提前返回并记录错误日志，不静默执行 |
 | `harmonyos/entry/src/main/ets/utils/StorageUtil.ets` | `LoginData.userOpenId` 字段语义变为存储 `unionId`（保留字段名以减少改动面，本质是"云端身份标识"） |
 | AGC 控制台（`SyncToken` 对象类型权限规则） | `Creator` → `Authenticated`（Read/Upsert/Delete），此项为控制台手工配置，不在代码里 |
@@ -48,15 +48,15 @@ Cloud DB 权限规则 → Creator 改为 Authenticated (Read/Upsert/Delete)
 1. App 启动 → EntryAbility.signInAnonymously() → agcAuthReady = true（不变）
 2. 用户点击华为登录 → doHarmonyLogin()
    → scopes = ['openid', 'profile']
-   → 拿到 unionId + nickName + avatarUri
-   → setCloudUserId(unionId)   // 而非 openId
-   → saveLogin(..., unionId)   // 本地持久化
+   → 拿到 unionID + nickName + avatarUri
+   → setCloudUserId(unionID)   // 而非 openId
+   → saveLogin(..., unionID)   // 本地持久化
 3. 若 isMember → initCloudDB() → cloudRestore()
    → SyncUtil.sync() 内部查询改为:
-     query().equalTo('is_deleted', false).equalTo('userId', unionId).get()
+     query().equalTo('is_deleted', false).equalTo('userId', unionID).get()
 ```
 
-**日常同步（增/删/改）：** 逻辑不变，`buildRecord()` 里塞的 `userId` 现在是真实 `unionId`，查询时用它做过滤。换设备后只要登录同一华为账号 → 同一 `unionId` → 能查到同一批记录。
+**日常同步（增/删/改）：** 逻辑不变，`buildRecord()` 里塞的 `userId` 现在是真实 `unionID`，查询时用它做过滤。换设备后只要登录同一华为账号 → 同一 `unionID` → 能查到同一批记录。
 
 ## 错误处理 / 边界情况
 
@@ -64,8 +64,36 @@ Cloud DB 权限规则 → Creator 改为 Authenticated (Read/Upsert/Delete)
 |---|---|
 | `unionId` 为空（理论上不会发生，代码固定请求 `openid` scope；若华为账号异常返回空值） | `setCloudUserId('')`，所有同步操作在写入/查询前检测到 `currentUserId` 为空则直接跳过并 toast 提示登录异常，不静默失败、不误读写数据 |
 | 老会员已同步的云端记录（`userId` 为空或旧 `openId`） | **不做迁移，直接视为孤儿数据。** 本地存储的 token 不受影响，用户下次登录同步时会被当作"本地新增"重新上传一份，携带新的 `unionId` |
-| AGC 控制台权限规则改为 `Authenticated` 后，理论上任何匿名登录的客户端都能绕过 App 直接查询到别人的记录 | 已知且明确接受的安全 trade-off：隔离从"数据库强制"降级为"App 代码保证"。与项目现有的 XOR 备份加密（非 AES，CLAUDE.md 中已明确定位为"演示级安全"）风险等级一致，不额外做迁移或加密弥补 |
+| AGC 控制台权限规则改为 `Authenticated` 后，理论上任何匿名登录的客户端都能绕过 App 直接查询到别人的记录 | 已知且明确接受的安全 trade-off：隔离从"数据库强制"降级为"App 代码保证"。**（2026-07-01 修正）** 最初把这个风险类比成"和 XOR 备份加密一个级别的演示级安全"，经代码 review 指出类比不成立——本节原方案里 `secret` 字段是明文存储（`isNeedEncrypt: false`），权限放宽后相当于把 TOTP 密钥明文暴露给任何能匿名登录的客户端，是相对于改动前（`Creator` 权限限定在创建者自己的匿名 session）的净安全降级，不是同级风险。已改为见下方"密钥加密与复合主键修正"一节的方案 |
+| `secret` 是 Zone 全局主键、不区分用户，权限放宽为 `Authenticated` 后，不同用户 upsert 相同 `secret`（例如两人都还留着演示用的 `INITIAL_TOKENS`，或真的共享同一个 TOTP 密钥）会互相覆盖对方记录、静默改写 `userId`，导致原用户的记录从此在自己的过滤查询里"消失" | 见下方"密钥加密与复合主键修正"一节，通过复合主键 `(userId, secret密文)` 解决 |
 | `initCloudDB` 调用时机 | 沿用现有 `agcAuthReady` 信号机制（`AppStorage` + `@Watch`），不变 |
+
+## 密钥加密与复合主键修正（2026-07-01，最终整体分支 review 后追加）
+
+最终 review 发现方案落地后有两个之前设计遗漏/误判的问题，用户确认都必须修：
+
+1. **`secret` 字段不能明文存云端。** 必须像本地备份导出（`CryptoUtil.ets` 的 `encryptData`/`decryptData`，PBKDF2 派生密钥 + 随机 salt + XOR keystream，"ENC3" 格式）一样做到"加密、可恢复"。但云同步是后台静默触发的（30 分钟定时同步、增删改都不弹窗），不能像备份导出那样每次弹密码框。**用户决定：用 `unionID` 派生一个确定性密钥，全程无需用户输入密码。**
+2. **`secret` 作为全局主键会导致跨用户覆盖。** 用户确认这是真实风险，此前"userId 为空、没法用来做主键"的判断已经不成立——Task 1/2 落地后 `currentUserId`（`unionID`）对任何登录成功的会员都是非空真实值（见 Task 2 的空值 guard）。已对照 SDK 源码（`FieldInfo.ts`、`NaturalStoreObjectSchema.ts` 的 `primaryKeyList`/`getPrimaryKeys(): string[]`）确认 `@hw-agconnect/cloud@1.0.2` 支持复合主键（多个字段同时标 `belongPrimaryKey: true`）。
+
+**修正方案：**
+
+- 新增 `CryptoUtil.ets` 导出函数 `encryptSecretForCloud(secret: string, unionId: string): string` / `decryptSecretFromCloud(enc: string, unionId: string): string`：复用文件内已有的 `pbkdf2`/`utf8Encode`/`utf8Decode` 私有辅助函数，用固定字符串盐（如 `'ArcaneKey-cloud-sync-v1'`）+ `unionId` 作为 PBKDF2 口令派生 32 字节密钥，**不使用随机 salt**（因为要保证同一用户对同一 secret 每次加密结果一致，否则会破坏 `sync()` 里靠 `secret` 做去重比对的逻辑）
+- `SyncUtil.ets` 的 `buildRecord()` 上传前调用 `encryptSecretForCloud`，`recordToToken()` 下载后调用 `decryptSecretFromCloud`——加解密只发生在云端序列化边界，`SyncToken`/`Token` 在 App 内其余逻辑（OTP 生成、`sync()` 内部按 `secret` 去重比对等）始终拿到的是明文，不受影响
+- `initCloudDB()` 的 schema 里，`userId` 字段也标记为 `belongPrimaryKey: true`（`secret` 字段保留原有的 `belongPrimaryKey: true`），组成复合主键 `(userId, secret密文)`——即使不同用户的加密结果碰巧相同（概率极低，且因为密钥本身就包含 `unionId`，同一明文在不同用户下加密结果通常本就不同），`userId` 作为复合主键的一部分也能保证不会跨用户覆盖
+- **不做向后兼容/格式迁移**：这个云同步身份修复分支尚未发布给真实用户，此前用明文写入云端的记录（如果有）视为测试数据，无需兼容读取
+
+## 密钥复用与元数据加密修正（2026-07-01，第二轮整体分支 review 后追加）
+
+第二轮 review（覆盖 Task 5/6 落地后的完整加密链路）发现两个新问题，用户确认都要修：
+
+1. **加密方案本质是"多次一密"（many-time pad）。** 上一节方案里 `encryptSecretForCloud`/`decryptSecretFromCloud` 对同一账号的所有 `secret` 都用同一个固定密钥（仅 `unionID` + 固定字符串派生）做异或——即 `密文1 ⊕ 密文2 = 明文1 ⊕ 明文2`。TOTP 密钥是 Base32 字符集，`account`/`brand` 又是明文存在旁边，给 crib-dragging 攻击留了空间，权限放宽后正好是要防的那类攻击者（任何 `Authenticated` 客户端）能利用的弱点。
+2. **`account`（用户名/邮箱，PII）、`brand`（服务名，有定向钓鱼风险）字段权限放宽后仍是明文**，第一轮 review 的风险表只覆盖了 `secret`，遗漏了这两个字段。
+
+**修正方案：**
+
+- 把 `encryptSecretForCloud`/`decryptSecretFromCloud` 泛化改造为 `encryptFieldForCloud(value, unionId, recordId, fieldName)` / `decryptFieldForCloud(enc, unionId, recordId, fieldName)`：salt 派生从只用固定字符串，改成 `固定字符串 + recordId + fieldName` 三者拼接（`recordId` 即 `token.id`，明文字段，加解密时都能拿到；`fieldName` 是 `'secret'`/`'account'`/`'brand'` 字面量）。这样同一账号下，不同记录、同一记录内的不同字段，都不会复用同一个密钥流，从根上消除"多次一密"问题，同时仍然保持"同一 `(recordId, fieldName)` 每次加密结果一致"（供主键稳定性和去重逻辑使用）
+- `account`、`brand` 两个字段也走同一套函数加密，与 `secret` 待遇一致；`buildRecord`/`recordToToken` 这个"云端序列化边界"的架构不变，App 内其余逻辑始终拿到解密后的明文
+- **已知取舍**：`recordId`（`token.id`，用 `Date.now().toString()` 生成）参与了密钥派生，意味着两台设备各自独立添加"同一个"密钥时会各自生成不同的 `id`，加密后云端会出现两条记录而非自然去重成一条。`sync()` 的 App 层去重（比对解密后明文的 `secret`）仍会在本地正确合并显示为一条，只是云端多存一份"重复"记录，不影响使用体验
 
 ## 测试方式
 

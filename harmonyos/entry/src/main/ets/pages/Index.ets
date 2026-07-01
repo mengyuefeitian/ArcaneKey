@@ -9,7 +9,7 @@ import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode } from '../utils/StorageUtil';
-import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase } from '../utils/IAPUtil';
+import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
 import { HomeView } from '../views/HomeView';
@@ -81,7 +81,10 @@ struct Index {
   @State privacyAgreed: boolean = false;
 
   // ── Membership ──────────────────────────────────────────────────
-  @State isMember: boolean = false;
+  // @Watch centralizes cloud-sync init: every place that flips isMember to
+  // true (cold start, fresh purchase, restored purchase) triggers it exactly
+  // once here, instead of each call site having to remember to call it.
+  @State @Watch('onIsMemberChanged') isMember: boolean = false;
   @State boundAccount: string = '';
 
   // ── Edit Secret Visibility ──────────────────────────────────────
@@ -145,13 +148,29 @@ struct Index {
     this.doCloudInit();
   }
 
+  // Called by @Watch whenever isMember is assigned (cold start already-member,
+  // fresh purchase, restored purchase — every path that unlocks membership).
+  // Fire-and-forget, same as doCloudInit() above; the caller doesn't need to
+  // await this to keep making progress.
+  private onIsMemberChanged(): void {
+    console.log('[Index] isMember changed:', this.isMember);
+    if (!this.isMember) return;
+    this.initCloudSyncIfReady().catch((e: Error) => {
+      console.error('[Index] onIsMemberChanged: initCloudSyncIfReady failed:', e.message);
+    });
+  }
+
   private doCloudInit(): void {
-    initCloudDB().then(() => {
+    initCloudDB().then((ready: boolean) => {
+      if (!ready) {
+        console.error('[Index] deferred cloud DB init failed, skipping restore/auto-sync this session');
+        return Promise.resolve();
+      }
       setCloudUserId(this.userOpenId);
       console.log('[Index] cloud DB initialized (deferred after AGC auth)');
-      return this.cloudRestore();
-    }).then(() => {
-      this.startAutoSync();
+      return this.cloudRestore().then(() => {
+        this.startAutoSync();
+      });
     }).catch((e: Error) => {
       console.error('[Index] deferred cloud init failed:', e.message);
     });
@@ -283,20 +302,9 @@ struct Index {
       this.boundAccount = member.boundAccount;
 
       this.refreshOtp();
-      if (this.isMember) {
-        if (this.agcAuthReady_) {
-          // AGC auth already finished — initialize cloud DB now
-          await initCloudDB();
-          setCloudUserId(this.userOpenId);
-          console.log('[Index] cloud DB initialized');
-          await this.cloudRestore();
-          this.startAutoSync();
-        } else {
-          // AGC auth still in flight — onAgcAuthReady() will handle init once it completes
-          this.pendingCloudInit = true;
-          console.log('[Index] cloud DB init deferred (waiting for AGC auth)');
-        }
-      } else {
+      // isMember was just assigned above (or below, on restore) — the @Watch on
+      // isMember triggers initCloudSyncIfReady() automatically, no explicit call needed.
+      if (!this.isMember) {
         try {
           const restored = await restoreOwnedPurchases(ctx);
           if (restored) {
@@ -311,6 +319,27 @@ struct Index {
       }
     } catch (_) {
       this.tokens = INITIAL_TOKENS.slice();
+    }
+  }
+
+  // Actually invoked via onIsMemberChanged() (the @Watch on isMember above) —
+  // call sites just set this.isMember, they don't need to call this directly.
+  private async initCloudSyncIfReady(): Promise<void> {
+    if (this.agcAuthReady_) {
+      // AGC auth already finished — initialize cloud DB now
+      const ready = await initCloudDB();
+      if (!ready) {
+        console.error('[Index] cloud DB init failed, skipping restore/auto-sync this session');
+        return;
+      }
+      setCloudUserId(this.userOpenId);
+      console.log('[Index] cloud DB initialized');
+      await this.cloudRestore();
+      this.startAutoSync();
+    } else {
+      // AGC auth still in flight — onAgcAuthReady() will handle init once it completes
+      this.pendingCloudInit = true;
+      console.log('[Index] cloud DB init deferred (waiting for AGC auth)');
     }
   }
 
@@ -425,23 +454,23 @@ struct Index {
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
       const request = new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
-      request.scopes = ['profile'];
+      request.scopes = ['openid', 'profile'];
       request.forceAuthorization = true;
       request.state = util.generateRandomUUID();
       const controller = new authentication.AuthenticationController(ctx);
       const resp = await controller.executeRequest(request);
       const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
-      const openId = cred?.openID || '';
-      console.info(`[ArcaneKey] HuaweiID auth success: openID=${openId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
+      const unionId = cred?.unionID || '';
+      console.info(`[ArcaneKey] HuaweiID auth success: unionID=${unionId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
       this.loggedIn = true;
-      this.userOpenId = openId;
-      setCloudUserId(openId);
+      this.userOpenId = unionId;
+      setCloudUserId(unionId);
       this.userName = cred?.nickName || '华为用户';
       this.userAvatar = cred?.avatarUri || '';
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, openId);
+      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, unionId);
       this.toast('登录成功');
       if (this.isMember) {
         await this.cloudRestore();
@@ -627,8 +656,19 @@ struct Index {
     try {
       const data = decryptData(this.importText, this.importPw) as Token[];
       if (!Array.isArray(data)) throw new Error('invalid');
-      const ids = new Set(this.tokens.map((t: Token) => t.id));
-      const imported = data.filter((t: Token) => this.isValidToken(t as object) && !ids.has(t.id));
+      // Dedup by secret (same key addToken()/importFromUris() use), not id —
+      // a backup's token ids were generated on the device that created the
+      // backup and won't match ids of accounts already added locally via
+      // other paths, so id-based dedup let the same secret in twice.
+      const existingSecrets = new Set(this.tokens.map((t: Token) => t.secret.toUpperCase()));
+      const imported: Token[] = [];
+      for (const t of data) {
+        if (!this.isValidToken(t as object)) continue;
+        const s = t.secret.toUpperCase();
+        if (existingSecrets.has(s)) continue;
+        imported.push(t);
+        existingSecrets.add(s);
+      }
       this.tokens = this.tokens.concat(imported);
       saveTokens(this.tokens);
       this.refreshOtp();
@@ -736,6 +776,7 @@ struct Index {
   }
 
   private async buyMembership(): Promise<void> {
+    console.info('[Index] buyMembership called, isMember:', this.isMember, 'loggedIn:', this.loggedIn);
     if (!this.loggedIn) {
       this.showLogin = true;
       return;
@@ -743,9 +784,10 @@ struct Index {
     const ctx = AppStorage.get<common.UIAbilityContext>('context');
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
+      await checkSandboxStatus(ctx);
       const tokenResult = await launchPurchase(ctx);
       await saveMember(true, this.userName, this.userOpenId);
-      this.isMember = true;
+      this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
       this.boundAccount = this.userName;
       this.toast('开通成功');
       this.showMembership = false;
@@ -760,28 +802,38 @@ struct Index {
       } else if (code === iap.IAPErrorCode.NETWORK_ERROR) {
         this.toast('网络异常，请检查网络后重试');
       } else if (code === iap.IAPErrorCode.PRODUCT_OWNED) {
+        // The just-failed createPurchase()'s cashier UIExtension session is still
+        // tearing down at this point; calling queryPurchases() immediately hangs
+        // with no resolve/reject (observed on real device). Give it a moment.
+        console.info('[Index] buyMembership: PRODUCT_OWNED, waiting before restorePurchase');
+        await new Promise<void>((resolve) => setTimeout(resolve, 800));
+        console.info('[Index] buyMembership: calling restorePurchase');
         await this.restorePurchase();
       } else {
+        console.warn('[Index] buyMembership: unhandled error code', code);
         this.toast(`开通失败（${code ?? '未知'}），请重试`);
       }
     }
   }
 
   private async restorePurchase(): Promise<void> {
+    console.info('[Index] restorePurchase called');
     const ctx = AppStorage.get<common.UIAbilityContext>('context');
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
       const result = await restoreOwnedPurchases(ctx);
+      console.info('[Index] restorePurchase: restoreOwnedPurchases returned', result ? 'a token' : 'null');
       if (result) {
         const bound = this.userName || this.boundAccount;
         await saveMember(true, bound, this.userOpenId);
-        this.isMember = true;
+        this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
         this.boundAccount = bound;
         this.toast('会员已恢复');
       } else {
         this.toast('未找到有效购买记录');
       }
-    } catch (_) {
+    } catch (e) {
+      console.error('[Index] restorePurchase failed:', (e as Error).message);
       this.toast('恢复失败，请检查网络后重试');
     }
   }
