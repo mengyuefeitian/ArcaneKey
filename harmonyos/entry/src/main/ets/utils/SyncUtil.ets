@@ -56,7 +56,7 @@ export async function initCloudDB(): Promise<boolean> {
   try {
     const db = cloud.database({
       objectTypeInfo: {
-        schemaVersion: 4,
+        schemaVersion: 6,
         objectTypes: [
           {
             objectTypeName: 'SyncToken',
