@@ -425,23 +425,23 @@ struct Index {
     if (!ctx) { this.toast('系统错误，请重试'); return; }
     try {
       const request = new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
-      request.scopes = ['profile'];
+      request.scopes = ['openid', 'profile'];
       request.forceAuthorization = true;
       request.state = util.generateRandomUUID();
       const controller = new authentication.AuthenticationController(ctx);
       const resp = await controller.executeRequest(request);
       const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
-      const openId = cred?.openID || '';
-      console.info(`[ArcaneKey] HuaweiID auth success: openID=${openId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
+      const unionId = cred?.unionID || '';
+      console.info(`[ArcaneKey] HuaweiID auth success: unionID=${unionId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
       this.loggedIn = true;
-      this.userOpenId = openId;
-      setCloudUserId(openId);
+      this.userOpenId = unionId;
+      setCloudUserId(unionId);
       this.userName = cred?.nickName || '华为用户';
       this.userAvatar = cred?.avatarUri || '';
       this.harmonyLogin = true;
       this.showLogin = false;
       this.privacyAgreed = false;
-      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, openId);
+      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, unionId);
       this.toast('登录成功');
       if (this.isMember) {
         await this.cloudRestore();
