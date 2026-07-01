@@ -82,6 +82,19 @@ Cloud DB 权限规则 → Creator 改为 Authenticated (Read/Upsert/Delete)
 - `initCloudDB()` 的 schema 里，`userId` 字段也标记为 `belongPrimaryKey: true`（`secret` 字段保留原有的 `belongPrimaryKey: true`），组成复合主键 `(userId, secret密文)`——即使不同用户的加密结果碰巧相同（概率极低，且因为密钥本身就包含 `unionId`，同一明文在不同用户下加密结果通常本就不同），`userId` 作为复合主键的一部分也能保证不会跨用户覆盖
 - **不做向后兼容/格式迁移**：这个云同步身份修复分支尚未发布给真实用户，此前用明文写入云端的记录（如果有）视为测试数据，无需兼容读取
 
+## 密钥复用与元数据加密修正（2026-07-01，第二轮整体分支 review 后追加）
+
+第二轮 review（覆盖 Task 5/6 落地后的完整加密链路）发现两个新问题，用户确认都要修：
+
+1. **加密方案本质是"多次一密"（many-time pad）。** 上一节方案里 `encryptSecretForCloud`/`decryptSecretFromCloud` 对同一账号的所有 `secret` 都用同一个固定密钥（仅 `unionID` + 固定字符串派生）做异或——即 `密文1 ⊕ 密文2 = 明文1 ⊕ 明文2`。TOTP 密钥是 Base32 字符集，`account`/`brand` 又是明文存在旁边，给 crib-dragging 攻击留了空间，权限放宽后正好是要防的那类攻击者（任何 `Authenticated` 客户端）能利用的弱点。
+2. **`account`（用户名/邮箱，PII）、`brand`（服务名，有定向钓鱼风险）字段权限放宽后仍是明文**，第一轮 review 的风险表只覆盖了 `secret`，遗漏了这两个字段。
+
+**修正方案：**
+
+- 把 `encryptSecretForCloud`/`decryptSecretFromCloud` 泛化改造为 `encryptFieldForCloud(value, unionId, recordId, fieldName)` / `decryptFieldForCloud(enc, unionId, recordId, fieldName)`：salt 派生从只用固定字符串，改成 `固定字符串 + recordId + fieldName` 三者拼接（`recordId` 即 `token.id`，明文字段，加解密时都能拿到；`fieldName` 是 `'secret'`/`'account'`/`'brand'` 字面量）。这样同一账号下，不同记录、同一记录内的不同字段，都不会复用同一个密钥流，从根上消除"多次一密"问题，同时仍然保持"同一 `(recordId, fieldName)` 每次加密结果一致"（供主键稳定性和去重逻辑使用）
+- `account`、`brand` 两个字段也走同一套函数加密，与 `secret` 待遇一致；`buildRecord`/`recordToToken` 这个"云端序列化边界"的架构不变，App 内其余逻辑始终拿到解密后的明文
+- **已知取舍**：`recordId`（`token.id`，用 `Date.now().toString()` 生成）参与了密钥派生，意味着两台设备各自独立添加"同一个"密钥时会各自生成不同的 `id`，加密后云端会出现两条记录而非自然去重成一条。`sync()` 的 App 层去重（比对解密后明文的 `secret`）仍会在本地正确合并显示为一条，只是云端多存一份"重复"记录，不影响使用体验
+
 ## 测试方式
 
 项目没有自动化测试基础设施（无 CI、无单测框架），沿用现有 HarmonyOS 手动测试模式：
