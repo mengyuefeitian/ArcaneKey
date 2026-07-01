@@ -202,3 +202,31 @@ export function decryptData(enc: string, pass: string): object[] {
   }
   return JSON.parse(utf8Decode(jsonBytes)) as object[];
 }
+
+// ── 云同步专用：确定性密钥加密（unionID 派生固定密钥，无随机 salt） ──
+// 与 encryptData/decryptData 不同：同一账号对同一 secret 每次加密结果必须一致，
+// 供 SyncUtil.sync() 按 secret 做本地/云端去重比对（比对时用解密后的明文）。
+export function encryptSecretForCloud(secret: string, unionId: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1');
+  const key = pbkdf2(unionId, salt, 10000, 32);
+  const secretBytes = utf8Encode(secret);
+  const xored: number[] = [];
+  for (let i = 0; i < secretBytes.length; i++) {
+    xored.push(secretBytes[i] ^ key[i % 32]);
+  }
+  const arr = new Uint8Array(xored);
+  const helper = new util.Base64Helper();
+  return helper.encodeToStringSync(arr);
+}
+
+export function decryptSecretFromCloud(enc: string, unionId: string): string {
+  const salt = utf8Encode('ArcaneKey-cloud-sync-v1');
+  const key = pbkdf2(unionId, salt, 10000, 32);
+  const helper = new util.Base64Helper();
+  const decoded: Uint8Array = helper.decodeSync(enc);
+  const plain: number[] = [];
+  for (let i = 0; i < decoded.length; i++) {
+    plain.push(decoded[i] ^ key[i % 32]);
+  }
+  return utf8Decode(plain);
+}
