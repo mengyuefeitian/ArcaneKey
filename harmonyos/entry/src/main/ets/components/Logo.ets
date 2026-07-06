@@ -5,6 +5,7 @@ import { matchBrandIcon } from '../utils/BrandIconMatcher';
 export struct Logo {
   @Watch('redraw') @Prop brand: string = '';
   @Watch('redraw') @Prop accentColor: string = '#4080D0';
+  @Prop account: string = '';
   @Prop logoSize: number = 40;
   @Prop isDark: boolean = true;
 
@@ -43,8 +44,8 @@ export struct Logo {
 
   build() {
     Stack() {
-      if (matchBrandIcon(this.brand)) {
-        Image($rawfile('brand-icons/' + matchBrandIcon(this.brand)))
+      if (matchBrandIcon(this.brand, this.account)) {
+        Image($rawfile('brand-icons/' + matchBrandIcon(this.brand, this.account)))
           .width(this.logoSize * 0.62)
           .height(this.logoSize * 0.62)
           .objectFit(ImageFit.Contain)

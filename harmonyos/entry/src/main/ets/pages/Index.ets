@@ -1008,7 +1008,7 @@ struct Index {
         Scroll() {
           Column({ space: 14 }) {
             Row() {
-              Logo({ brand: this.editBrand || (this.editToken?.brand ?? ''), logoSize: 64, isDark: this.isDark, accentColor: this.accentColor })
+              Logo({ brand: this.editBrand || (this.editToken?.brand ?? ''), account: this.editAccount || (this.editToken?.account ?? ''), logoSize: 64, isDark: this.isDark, accentColor: this.accentColor })
             }
             .width('100%').padding({ top: 8, bottom: 8 }).justifyContent(FlexAlign.Center)
 
@@ -1139,7 +1139,7 @@ struct Index {
 
         Scroll() {
           Column({ space: 24 }) {
-            Logo({ brand: this.showQrToken?.brand ?? '', logoSize: 56, isDark: this.isDark, accentColor: this.accentColor })
+            Logo({ brand: this.showQrToken?.brand ?? '', account: this.showQrToken?.account ?? '', logoSize: 56, isDark: this.isDark, accentColor: this.accentColor })
             Column({ space: 12 }) {
               QRCode(this.qrUri)
                 .width(240).height(240)

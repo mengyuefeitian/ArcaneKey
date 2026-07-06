@@ -3,6 +3,10 @@ export interface BrandIconConfig {
   officialName: string;
   iconFile: string;
   matchKeywords: string[];
+  // Email domain suffixes (e.g. '163.com') checked against the token's
+  // account field when brand-text matching finds nothing — for brands
+  // that are primarily recognized by their email address, not the issuer.
+  emailDomains?: string[];
 }
 
 // Order is priority: more specific entries must come before generic ones
@@ -13,7 +17,7 @@ export const BRAND_ICONS: BrandIconConfig[] = [
   { id: 'google', officialName: 'Google', iconFile: 'google.svg', matchKeywords: ['google', 'gmail'] },
   { id: 'synology-dsm', officialName: 'Synology DSM', iconFile: 'synology-dsm.svg', matchKeywords: ['dsm', 'synology dsm', 'quickconnect'] },
   { id: 'synology', officialName: 'Synology', iconFile: 'synology.svg', matchKeywords: ['synology', '群晖'] },
-  { id: 'netease-mail', officialName: '网易邮箱', iconFile: 'netease-mail.svg', matchKeywords: ['网易邮箱', '163', '126', 'netease mail', 'yeah.net'] },
+  { id: 'netease-mail', officialName: '网易邮箱', iconFile: 'netease-mail.svg', matchKeywords: ['网易邮箱', '163', '126', 'netease mail', 'yeah.net'], emailDomains: ['163.com', '126.com', 'yeah.net'] },
   { id: 'netease', officialName: '网易', iconFile: 'netease.svg', matchKeywords: ['网易', 'netease'] },
   { id: 'alibaba-cloud', officialName: '阿里云', iconFile: 'alibaba-cloud.svg', matchKeywords: ['阿里云', 'alibabacloud', 'aliyun'] },
   { id: 'douyin', officialName: '抖音', iconFile: 'douyin.svg', matchKeywords: ['抖音', 'douyin'] },
