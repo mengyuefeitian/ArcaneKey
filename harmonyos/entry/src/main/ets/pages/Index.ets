@@ -86,6 +86,7 @@ struct Index {
   // once here, instead of each call site having to remember to call it.
   @State @Watch('onIsMemberChanged') isMember: boolean = false;
   @State boundAccount: string = '';
+  @State memberAvatarLoadFailed: boolean = false;
 
   // ── Edit Secret Visibility ──────────────────────────────────────
   @State editSecretVisible: boolean = false;
@@ -1448,16 +1449,22 @@ struct Index {
             .borderRadius(14)
 
             Column({ space: 6 }) {
-              Text('绑定账号').fontSize(10).fontColor('rgba(238,238,245,0.65)')
+              Text('绑定账号').fontSize(10).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               Row({ space: 10 }) {
-                Stack() {
-                  Text(this.boundAccount.length > 0 ? this.boundAccount[0].toUpperCase() : '华')
-                    .fontSize(14).fontColor(this.c('#fff', '#fff')).fontWeight(700)
+                if (this.userAvatar && !this.memberAvatarLoadFailed) {
+                  Image(this.userAvatar)
+                    .width(32).height(32).borderRadius(16)
+                    .onError(() => { this.memberAvatarLoadFailed = true; })
+                } else {
+                  Stack() {
+                    Text(this.userName.length > 0 ? this.userName[0].toUpperCase() : '华')
+                      .fontSize(14).fontColor(this.c('#fff', '#fff')).fontWeight(700)
+                  }
+                  .width(32).height(32).borderRadius(16)
+                  .backgroundColor(this.accentColor)
                 }
-                .width(32).height(32).borderRadius(16)
-                .backgroundColor(this.accentColor)
                 Column({ space: 2 }) {
-                  Text(this.boundAccount || '华为用户').fontSize(13).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+                  Text(this.userName || this.boundAccount || '华为用户').fontSize(13).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
                   Text('换设备登录同账号可恢复会员').fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                 }.alignItems(HorizontalAlign.Start)
               }.width('100%')
