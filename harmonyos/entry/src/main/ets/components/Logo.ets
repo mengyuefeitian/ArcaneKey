@@ -1,9 +1,12 @@
 import display from '@ohos.display';
+import { matchBrandIcon } from '../utils/BrandIconMatcher';
+import { findBrandIconConfig, BrandIconConfig } from '../model/BrandIcons';
 
 @Component
 export struct Logo {
   @Watch('redraw') @Prop brand: string = '';
   @Watch('redraw') @Prop accentColor: string = '#4080D0';
+  @Prop account: string = '';
   @Prop logoSize: number = 40;
   @Prop isDark: boolean = true;
 
@@ -18,6 +21,14 @@ export struct Logo {
     const lg = Math.min(255, Math.round(g + (255 - g) * 0.60));
     const lb = Math.min(255, Math.round(b + (255 - b) * 0.60));
     return '#' + lr.toString(16).padStart(2, '0') + lg.toString(16).padStart(2, '0') + lb.toString(16).padStart(2, '0');
+  }
+
+  private matchedIconConfig(): BrandIconConfig | null {
+    const iconFile = matchBrandIcon(this.brand, this.account);
+    if (!iconFile) {
+      return null;
+    }
+    return findBrandIconConfig(iconFile);
   }
 
   private draw(): void {
@@ -42,18 +53,25 @@ export struct Logo {
 
   build() {
     Stack() {
-      Canvas(this.ctx)
-        .width(this.logoSize)
-        .height(this.logoSize)
-        .onReady(() => {
-          this.ready = true;
-          this.draw();
-        })
+      if (this.matchedIconConfig()) {
+        Image($rawfile('brand-icons/' + this.matchedIconConfig()!.iconFile))
+          .width(this.logoSize * 0.62 * (this.matchedIconConfig()!.scale ?? 1))
+          .height(this.logoSize * 0.62 * (this.matchedIconConfig()!.scale ?? 1))
+          .objectFit(ImageFit.Contain)
+      } else {
+        Canvas(this.ctx)
+          .width(this.logoSize)
+          .height(this.logoSize)
+          .onReady(() => {
+            this.ready = true;
+            this.draw();
+          })
+      }
     }
     .width(this.logoSize)
     .height(this.logoSize)
     .borderRadius(this.logoSize * 0.28)
-    .backgroundColor(this.accentColor + (this.isDark ? '1a' : '28'))
-    .border({ width: 1.5, color: this.accentColor + (this.isDark ? '44' : '55') })
+    .backgroundColor(this.matchedIconConfig() ? '#FFFFFF' : this.accentColor + (this.isDark ? '1a' : '28'))
+    .border({ width: 1.5, color: this.matchedIconConfig() ? '#E5E5E5' : this.accentColor + (this.isDark ? '44' : '55') })
   }
 }

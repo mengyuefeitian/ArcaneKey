@@ -50,7 +50,7 @@ export struct TokenCard {
     Column() {
         // Upper row — edit
         Row({ space: 12 }) {
-          Logo({ brand: this.token.brand, logoSize: 42, isDark: this.isDark, accentColor: this.accentColor })
+          Logo({ brand: this.token.brand, account: this.token.account, logoSize: 42, isDark: this.isDark, accentColor: this.accentColor })
           Column({ space: 2 }) {
             Text(this.token.brand)
               .fontSize(15).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810')).maxLines(1)
