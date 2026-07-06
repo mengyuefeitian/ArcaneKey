@@ -1,5 +1,6 @@
 import display from '@ohos.display';
 import { matchBrandIcon } from '../utils/BrandIconMatcher';
+import { findBrandIconConfig, BrandIconConfig } from '../model/BrandIcons';
 
 @Component
 export struct Logo {
@@ -20,6 +21,14 @@ export struct Logo {
     const lg = Math.min(255, Math.round(g + (255 - g) * 0.60));
     const lb = Math.min(255, Math.round(b + (255 - b) * 0.60));
     return '#' + lr.toString(16).padStart(2, '0') + lg.toString(16).padStart(2, '0') + lb.toString(16).padStart(2, '0');
+  }
+
+  private matchedIconConfig(): BrandIconConfig | null {
+    const iconFile = matchBrandIcon(this.brand, this.account);
+    if (!iconFile) {
+      return null;
+    }
+    return findBrandIconConfig(iconFile);
   }
 
   private draw(): void {
@@ -44,11 +53,13 @@ export struct Logo {
 
   build() {
     Stack() {
-      if (matchBrandIcon(this.brand, this.account)) {
-        Image($rawfile('brand-icons/' + matchBrandIcon(this.brand, this.account)))
-          .width(this.logoSize * 0.62)
-          .height(this.logoSize * 0.62)
+      if (this.matchedIconConfig()) {
+        Image($rawfile('brand-icons/' + this.matchedIconConfig()!.iconFile))
+          .width(this.logoSize * 0.62 * (this.matchedIconConfig()!.scale ?? 1))
+          .height(this.logoSize * 0.62 * (this.matchedIconConfig()!.scale ?? 1))
           .objectFit(ImageFit.Contain)
+          .fillColor(this.matchedIconConfig()!.monochrome ? this.accentColor : undefined)
+          .opacity(this.isDark ? (this.matchedIconConfig()!.dimOpacityInDark ?? 1) : 1)
       } else {
         Canvas(this.ctx)
           .width(this.logoSize)
