@@ -58,8 +58,6 @@ export struct Logo {
           .width(this.logoSize * 0.62 * (this.matchedIconConfig()!.scale ?? 1))
           .height(this.logoSize * 0.62 * (this.matchedIconConfig()!.scale ?? 1))
           .objectFit(ImageFit.Contain)
-          .fillColor(this.matchedIconConfig()!.monochrome ? this.accentColor : undefined)
-          .opacity(this.isDark ? (this.matchedIconConfig()!.dimOpacityInDark ?? 1) : 1)
       } else {
         Canvas(this.ctx)
           .width(this.logoSize)
@@ -73,7 +71,7 @@ export struct Logo {
     .width(this.logoSize)
     .height(this.logoSize)
     .borderRadius(this.logoSize * 0.28)
-    .backgroundColor(this.accentColor + (this.isDark ? '1a' : '28'))
-    .border({ width: 1.5, color: this.accentColor + (this.isDark ? '44' : '55') })
+    .backgroundColor(this.matchedIconConfig() ? '#FFFFFF' : this.accentColor + (this.isDark ? '1a' : '28'))
+    .border({ width: 1.5, color: this.matchedIconConfig() ? '#E5E5E5' : this.accentColor + (this.isDark ? '44' : '55') })
   }
 }
