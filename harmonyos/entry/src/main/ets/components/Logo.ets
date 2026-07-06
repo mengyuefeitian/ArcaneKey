@@ -1,4 +1,5 @@
 import display from '@ohos.display';
+import { matchBrandIcon } from '../utils/BrandIconMatcher';
 
 @Component
 export struct Logo {
@@ -42,13 +43,20 @@ export struct Logo {
 
   build() {
     Stack() {
-      Canvas(this.ctx)
-        .width(this.logoSize)
-        .height(this.logoSize)
-        .onReady(() => {
-          this.ready = true;
-          this.draw();
-        })
+      if (matchBrandIcon(this.brand)) {
+        Image($rawfile('brand-icons/' + matchBrandIcon(this.brand)))
+          .width(this.logoSize * 0.62)
+          .height(this.logoSize * 0.62)
+          .objectFit(ImageFit.Contain)
+      } else {
+        Canvas(this.ctx)
+          .width(this.logoSize)
+          .height(this.logoSize)
+          .onReady(() => {
+            this.ready = true;
+            this.draw();
+          })
+      }
     }
     .width(this.logoSize)
     .height(this.logoSize)
