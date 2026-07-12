@@ -172,3 +172,27 @@ export async function saveCloudSyncEnabled(enabled: boolean): Promise<void> {
     await pref.flush();
   } catch (_) {}
 }
+
+export type SecurityMode = 'off' | 'face' | 'fingerprint' | 'lock';
+
+const SECURITY_MODE_KEY = 'ak_security_mode';
+
+export async function loadSecurityMode(): Promise<SecurityMode> {
+  try {
+    if (!pref) return 'off';
+    const val = await pref.get(SECURITY_MODE_KEY, 'off');
+    const s = String(val);
+    if (s === 'face' || s === 'fingerprint' || s === 'lock') return s;
+    return 'off';
+  } catch (_) {
+    return 'off';
+  }
+}
+
+export async function saveSecurityMode(mode: SecurityMode): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(SECURITY_MODE_KEY, mode);
+    await pref.flush();
+  } catch (_) {}
+}
