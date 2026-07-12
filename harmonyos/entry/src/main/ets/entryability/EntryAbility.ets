@@ -3,7 +3,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { initialize } from '@hw-agconnect/hmcore';
 import { util } from '@kit.ArkTS';
-import cloud from '@hw-agconnect/cloud';
+import cloud, { SignInResult } from '@hw-agconnect/cloud';
 
 export default class EntryAbility extends UIAbility {
   private windowStage: window.WindowStage | null = null;
@@ -19,12 +19,13 @@ export default class EntryAbility extends UIAbility {
       const decoder = new util.TextDecoder('utf-8');
       initialize(this.context, JSON.parse(decoder.decode(cfgBytes)));
       hilog.info(0x0000, 'ArcaneKey', '%{public}s', 'AGC SDK initialized');
-      const signInResult = await cloud.auth().signInAnonymously();
+      const signInResult: SignInResult = await cloud.auth().signInAnonymously();
       hilog.info(0x0000, 'ArcaneKey', 'AGC anonymous sign in success, uid=%{public}s',
         signInResult.getUser().getUid());
       AppStorage.set('agcAuthReady', true);
     } catch (e) {
-      hilog.error(0x0000, 'ArcaneKey', 'AGC init/auth failed: %{public}s', JSON.stringify(e));
+      const errMsg: string = e instanceof Error ? e.message : String(e);
+      hilog.error(0x0000, 'ArcaneKey', 'AGC init/auth failed: %{public}s', errMsg);
       // Unblock cloud DB init even on failure — it will surface its own 403 error
       AppStorage.set('agcAuthReady', true);
     }
