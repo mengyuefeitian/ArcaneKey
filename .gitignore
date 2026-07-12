@@ -73,3 +73,5 @@ miniprogram/cloudfunctions/
 *.env
 
 .superpowers/
+
+.worktrees/
