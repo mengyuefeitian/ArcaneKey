@@ -34,6 +34,16 @@ export struct ScanView {
     this.scanErrMsg = '';
     this.scanning = false;
 
+    // Auto-start camera scan only if permission already granted (no prompt).
+    // First-time users still tap「扫描二维码」→ doScan → requestCameraPermission.
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (ctx) {
+      this.isCameraGranted(ctx).then((granted: boolean) => {
+        if (granted && this.tab === 0 && !this.scanning) {
+          this.doScan(false);
+        }
+      });
+    }
   }
 
   private validate(): boolean {
@@ -77,6 +87,19 @@ export struct ScanView {
     }
   }
 
+  /** Check camera permission without prompting the user. */
+  private async isCameraGranted(ctx: common.UIAbilityContext): Promise<boolean> {
+    try {
+      const atManager = abilityAccessCtrl.createAtManager();
+      const tokenId: number = ctx.applicationInfo.accessTokenId;
+      const permission: Permissions = 'ohos.permission.CAMERA';
+      const status = atManager.checkAccessTokenSync(tokenId, permission);
+      return status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+    } catch (e) {
+      return false;
+    }
+  }
+
   private async requestCameraPermission(ctx: common.UIAbilityContext): Promise<boolean> {
     const atManager = abilityAccessCtrl.createAtManager();
     const permission: Permissions = 'ohos.permission.CAMERA';
@@ -89,6 +112,9 @@ export struct ScanView {
   }
 
   private async doScan(enableAlbum: boolean): Promise<void> {
+    if (this.scanning) {
+      return;
+    }
     this.scanning = true;
     try {
       const ctx = AppStorage.get<common.UIAbilityContext>('context');
