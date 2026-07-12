@@ -8,7 +8,7 @@ import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -87,6 +87,7 @@ struct Index {
   @State @Watch('onIsMemberChanged') isMember: boolean = false;
   @State boundAccount: string = '';
   @State memberAvatarLoadFailed: boolean = false;
+  @State cloudSyncEnabled: boolean = false;
 
   // ── Edit Secret Visibility ──────────────────────────────────────
   @State editSecretVisible: boolean = false;
@@ -299,8 +300,10 @@ struct Index {
       this.isDark = await loadThemeMode();
       this.updateStatusBarColor();
       const member: MemberData = await loadMember();
-      this.isMember = member.isMember;
       this.boundAccount = member.boundAccount;
+      // Load sync pref BEFORE assigning isMember so @Watch → startAutoSync sees the gate
+      this.cloudSyncEnabled = await loadCloudSyncEnabled(member.isMember);
+      this.isMember = member.isMember;
 
       this.refreshOtp();
       // isMember was just assigned above (or below, on restore) — the @Watch on
@@ -313,8 +316,9 @@ struct Index {
             if (!member.isMember) {
               await saveMember(true, member.boundAccount);
             }
-            this.isMember = true;
             this.boundAccount = member.boundAccount;
+            this.cloudSyncEnabled = await loadCloudSyncEnabled(true);
+            this.isMember = true;
           }
         } catch (_) {}
       }
@@ -382,8 +386,8 @@ struct Index {
     this.refreshOtp();
     this.currentTab = 0;
     this.toast(`已添加 ${brand}`);
-    if (this.isMember) {
-      // Fire-and-forget async backup
+    if (this.isMember && this.cloudSyncEnabled) {
+      // Fire-and-forget async backup (gated by cloud-sync toggle)
       this.cloudBackup();
     }
   }
@@ -399,7 +403,7 @@ struct Index {
     });
     saveTokens(this.tokens);
     this.refreshOtp();
-    if (this.isMember && this.loggedIn) {
+    if (this.isMember && this.cloudSyncEnabled && this.loggedIn) {
       const updated = this.tokens.find((t: Token): boolean => t.id === id);
       if (updated) {
         updateToken(updated).catch((e: Error) => console.error('[Index] cloudUpdate failed:', e.message));
@@ -592,7 +596,7 @@ struct Index {
     } else {
       this.toast(`成功导入 ${actualToAdd.length} 个账号`);
     }
-    if (this.isMember && this.loggedIn) { this.cloudBackup(); }
+    if (this.isMember && this.cloudSyncEnabled && this.loggedIn) { this.cloudBackup(); }
   }
 
   private doImport(): void {
@@ -769,11 +773,22 @@ struct Index {
   }
 
   private startAutoSync(): void {
-    if (!this.isMember) return;
+    if (!this.isMember || !this.cloudSyncEnabled) return;
 
     startAutoSync(async () => {
       await this.cloudBackup();
     });
+  }
+
+  private async onCloudSyncToggle(on: boolean): Promise<void> {
+    if (!this.isMember) return;
+    this.cloudSyncEnabled = on;
+    await saveCloudSyncEnabled(on);
+    if (on) {
+      this.startAutoSync();
+    } else {
+      stopAutoSync();
+    }
   }
 
   private async buyMembership(): Promise<void> {
@@ -788,6 +803,8 @@ struct Index {
       await checkSandboxStatus(ctx);
       const tokenResult = await launchPurchase(ctx);
       await saveMember(true, this.userName, this.userOpenId);
+      this.cloudSyncEnabled = true;
+      await saveCloudSyncEnabled(true);
       this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
       this.boundAccount = this.userName;
       this.toast('开通成功');
@@ -827,6 +844,8 @@ struct Index {
       if (result) {
         const bound = this.userName || this.boundAccount;
         await saveMember(true, bound, this.userOpenId);
+        this.cloudSyncEnabled = true;
+        await saveCloudSyncEnabled(true);
         this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
         this.boundAccount = bound;
         this.toast('会员已恢复');
@@ -1358,6 +1377,33 @@ struct Index {
   }
 
   @Builder
+  cloudSyncToggleRow() {
+    Row() {
+      Column({ space: 2 }) {
+        Text('云同步').fontSize(14).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+        Text(this.isMember ? '关闭后仅保留本地，仍可手动备份' : '开通会员后可用')
+          .fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Toggle({ type: ToggleType.Switch, isOn: this.isMember ? this.cloudSyncEnabled : false })
+        .selectedColor(this.accentColor)
+        .enabled(this.isMember)
+        .onChange((on: boolean) => {
+          this.onCloudSyncToggle(on);
+        })
+    }
+    .width('100%')
+    .padding(14)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(this.c('#191920', '#FFFFFF'))
+    .borderRadius(14)
+    .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
+    .opacity(this.isMember ? 1 : 0.4)
+  }
+
+  @Builder
   themeModal() {
     Column() {
       this.modalHeader('皮肤主题', () => { this.showTheme = false; })
@@ -1474,6 +1520,7 @@ struct Index {
             .alignItems(HorizontalAlign.Start)
 
             this.memberBenefits()
+            this.cloudSyncToggleRow()
 
           } else {
             // ── 共用：icon + 价格 ─────────────────────────────────────
@@ -1492,6 +1539,7 @@ struct Index {
 
             // ── 共用：权益列表 ────────────────────────────────────────
             this.memberBenefits()
+            this.cloudSyncToggleRow()
 
             if (!this.loggedIn) {
               // ── 状态 1：未登录 ──────────────────────────────────────
