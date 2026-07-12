@@ -8,7 +8,7 @@ import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -18,6 +18,7 @@ import { ProfileView } from '../views/ProfileView';
 import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
+import { SecurityView } from '../views/SecurityView';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -103,6 +104,10 @@ struct Index {
   // ── Feedback & Membership Modals ────────────────────────────────
   @State showFeedback: boolean = false;
   @State showMembership: boolean = false;
+
+  // ── Security Settings ───────────────────────────────────────────
+  @State showSecurity: boolean = false;
+  @State securityMode: SecurityMode = 'off';
 
   // ── Search ──────────────────────────────────────────────────────
   @State searching: boolean = false;
@@ -203,6 +208,10 @@ struct Index {
       this.showFeedback = false;
       return true;
     }
+    if (this.showSecurity) {
+      this.showSecurity = false;
+      return true;
+    }
     if (this.showLogin) {
       this.showLogin = false;
       return true;
@@ -299,6 +308,7 @@ struct Index {
       if (theme) { this.accentColor = theme.color; this.currentTheme = theme; }
       this.isDark = await loadThemeMode();
       this.updateStatusBarColor();
+      this.securityMode = await loadSecurityMode();
       const member: MemberData = await loadMember();
       this.boundAccount = member.boundAccount;
       // Load sync pref BEFORE assigning isMember so @Watch → startAutoSync sees the gate
@@ -1751,6 +1761,14 @@ struct Index {
             onAccountTap: () => { this.showAccountInfo = true; },
             onMembershipTap: () => { this.showMembership = true; },
             onFeedbackTap: () => { this.showFeedback = true; },
+            onSecurityTap: () => {
+              if (!this.loggedIn) {
+                this.toast('请先登录');
+                this.showLogin = true;
+                return;
+              }
+              this.showSecurity = true;
+            },
             onToggleMode: () => {
               this.isDark = !this.isDark;
               saveThemeMode(this.isDark);
@@ -1788,6 +1806,18 @@ struct Index {
       if (this.showTheme)  { this.themeModal() }
       if (this.showAccountInfo) { this.accountInfoModal() }
       if (this.showMembership) { this.membershipModal() }
+      if (this.showSecurity) {
+        SecurityView({
+          accentColor: this.accentColor,
+          isDark: this.isDark,
+          mode: this.securityMode,
+          onModeChange: (m: SecurityMode) => { this.securityMode = m; },
+          onClose: () => { this.showSecurity = false; },
+          onUnavailable: (msg: string) => { this.toast(msg); }
+        })
+          .position({ x: 0, y: 0 })
+          .zIndex(400)
+      }
       if (this.showFeedback) {
         FeedbackView({
           accentColor: this.accentColor,
