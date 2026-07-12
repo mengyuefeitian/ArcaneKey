@@ -71,3 +71,5 @@ miniprogram/cloudfunctions/
 .env
 .env.*
 *.env
+
+.superpowers/
