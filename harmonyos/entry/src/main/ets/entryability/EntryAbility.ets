@@ -12,6 +12,7 @@ export default class EntryAbility extends UIAbility {
     hilog.info(0x0000, 'ArcaneKey', '%{public}s', 'Ability onCreate');
     // Signal not ready yet so Index.ets defers cloud DB init until auth completes
     AppStorage.setOrCreate('agcAuthReady', false);
+    AppStorage.setOrCreate('appForegroundSeq', 0);
     AppStorage.setOrCreate('context', this.context);
     try {
       const cfgBytes = await this.context.resourceManager.getRawFileContent('agconnect-services.json');
@@ -58,6 +59,11 @@ export default class EntryAbility extends UIAbility {
     }
   }
 
-  onForeground(): void {}
+  onForeground(): void {
+    // Bump sequence so Index @StorageLink/@Watch can re-lock when security is on
+    const prev = AppStorage.get<number>('appForegroundSeq') ?? 0;
+    AppStorage.setOrCreate('appForegroundSeq', prev + 1);
+  }
+
   onBackground(): void {}
 }

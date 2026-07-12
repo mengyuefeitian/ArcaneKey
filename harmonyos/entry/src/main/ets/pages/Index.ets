@@ -19,6 +19,7 @@ import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
 import { SecurityView } from '../views/SecurityView';
+import { authenticateSecurity } from '../utils/SecurityUtil';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -108,6 +109,9 @@ struct Index {
   // ── Security Settings ───────────────────────────────────────────
   @State showSecurity: boolean = false;
   @State securityMode: SecurityMode = 'off';
+  @State securityLocked: boolean = false;
+  // EntryAbility.onForeground bumps this; @Watch re-locks when security is on
+  @StorageLink('appForegroundSeq') @Watch('onForegroundSeqChanged') foregroundSeq: number = 0;
 
   // ── Search ──────────────────────────────────────────────────────
   @State searching: boolean = false;
@@ -129,6 +133,7 @@ struct Index {
   private cdTimer: number = -1;
   private autoSyncTimer: number = -1;
   private pendingCloudInit: boolean = false;
+  private securityUnlocking: boolean = false;
 
   // Mirrors AppStorage['agcAuthReady']; @Watch fires when EntryAbility finishes signInAnonymously()
   @StorageProp('agcAuthReady') @Watch('onAgcAuthReady') agcAuthReady_: boolean = false;
@@ -153,6 +158,32 @@ struct Index {
     if (!this.agcAuthReady_ || !this.pendingCloudInit) return;
     this.pendingCloudInit = false;
     this.doCloudInit();
+  }
+
+  // Called by @Watch when EntryAbility.onForeground bumps appForegroundSeq
+  private onForegroundSeqChanged(): void {
+    if (this.securityMode !== 'off' && this.loggedIn) {
+      this.securityLocked = true;
+      this.runSecurityUnlock();
+    }
+  }
+
+  private async runSecurityUnlock(): Promise<void> {
+    if (this.securityMode === 'off' || !this.loggedIn) {
+      this.securityLocked = false;
+      return;
+    }
+    // Debounce: cold start can fire loadData unlock + onForeground seq together
+    if (this.securityUnlocking) {
+      return;
+    }
+    this.securityUnlocking = true;
+    try {
+      const ok = await authenticateSecurity(this.securityMode);
+      this.securityLocked = !ok;
+    } finally {
+      this.securityUnlocking = false;
+    }
   }
 
   // Called by @Watch whenever isMember is assigned (cold start already-member,
@@ -189,6 +220,10 @@ struct Index {
   // exits (returns false) when no overlay is open — i.e. at the true
   // top level (home tab, no modals).
   onBackPress(): boolean {
+    // zIndex 900 — app lock overlay: stay locked, do not exit
+    if (this.securityLocked) {
+      return true;
+    }
     // zIndex 999 — delete confirmation dialog can be open on top of EditModal
     if (this.showDeleteConfirm) {
       this.showDeleteConfirm = false;
@@ -331,6 +366,12 @@ struct Index {
             this.isMember = true;
           }
         } catch (_) {}
+      }
+
+      // Cold start: lock until biometric / lock-screen auth succeeds
+      if (this.securityMode !== 'off' && this.loggedIn) {
+        this.securityLocked = true;
+        this.runSecurityUnlock();
       }
     } catch (_) {
       this.tokens = INITIAL_TOKENS.slice();
@@ -1655,6 +1696,7 @@ struct Index {
             this.userAvatar = '';
             this.userOpenId = '';
             this.harmonyLogin = false;
+            this.securityLocked = false;
             saveLogin(false, '', '', '', false);
             stopAutoSync();
             this.toast('已退出登录');
@@ -1668,6 +1710,41 @@ struct Index {
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
+  }
+
+  // ── Builder: Security lock overlay ──────────────────────────────
+  @Builder
+  securityLockOverlay() {
+    Column({ space: 16 }) {
+      Text('🔒')
+        .fontSize(48)
+      Text('验证以继续')
+        .fontSize(20)
+        .fontWeight(700)
+        .fontColor(this.c('#eeeef5', '#2C1810'))
+      Text('请完成身份验证以解锁应用')
+        .fontSize(13)
+        .fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
+        .margin({ bottom: 8 })
+      Button('点击重试')
+        .width(200)
+        .height(48)
+        .borderRadius(14)
+        .backgroundColor(this.accentColor)
+        .fontColor('#fff')
+        .fontSize(15)
+        .fontWeight(650)
+        .onClick(() => {
+          this.runSecurityUnlock();
+        })
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor(this.c('#0d0d12', '#FAF7F2'))
+    .position({ x: 0, y: 0 })
+    .zIndex(900)
   }
 
   // ── Build ───────────────────────────────────────────────────────
@@ -1745,6 +1822,7 @@ struct Index {
               this.userAvatar = '';
               this.userOpenId = '';
               this.harmonyLogin = false;
+              this.securityLocked = false;
               saveLogin(false, '', '', '', false);
               stopAutoSync();
               this.toast('已退出登录');
@@ -1845,6 +1923,11 @@ struct Index {
         .width('100%').height('100%').backgroundColor('rgba(0,0,0,0.6)')
         .alignItems(HorizontalAlign.Center).justifyContent(FlexAlign.Center)
         .zIndex(999)
+      }
+
+      // ── App lock (cold start / return to foreground) ────────────
+      if (this.securityLocked) {
+        this.securityLockOverlay()
       }
 
       // ── Toast ───────────────────────────────────────────────────
