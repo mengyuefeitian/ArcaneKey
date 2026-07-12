@@ -29,6 +29,19 @@ export function isSecurityTypeAvailable(mode: SecurityMode): boolean {
   }
 }
 
+/**
+ * UserAuth requires challenge as Uint8Array with length 0–32.
+ * Empty array is rejected by NAPI on device (err 401: "length of challenge cannot exceed 32"
+ * / GetUint8ArrayValue fail) — use a short fixed challenge instead.
+ */
+function buildChallenge(): Uint8Array {
+  // 16 bytes is within the documented max (32) and accepted by UserAuth NAPI
+  return new Uint8Array([
+    0x41, 0x72, 0x63, 0x61, 0x6e, 0x65, 0x4b, 0x65,
+    0x79, 0x53, 0x65, 0x63, 0x75, 0x72, 0x65, 0x00
+  ]);
+}
+
 export function authenticateSecurity(mode: SecurityMode): Promise<boolean> {
   return new Promise<boolean>((resolve: (value: boolean) => void) => {
     const authType = toAuthType(mode);
@@ -38,7 +51,7 @@ export function authenticateSecurity(mode: SecurityMode): Promise<boolean> {
     }
     try {
       const authParam: userAuth.AuthParam = {
-        challenge: new Uint8Array(0),
+        challenge: buildChallenge(),
         authType: [authType],
         authTrustLevel: userAuth.AuthTrustLevel.ATL1
       };
@@ -53,7 +66,9 @@ export function authenticateSecurity(mode: SecurityMode): Promise<boolean> {
       };
       instance.on('result', callback);
       instance.start();
-    } catch (_) {
+    } catch (e) {
+      console.error('[SecurityUtil] authenticateSecurity failed: ' +
+        (e instanceof Error ? e.message : String(e)));
       resolve(false);
     }
   });
