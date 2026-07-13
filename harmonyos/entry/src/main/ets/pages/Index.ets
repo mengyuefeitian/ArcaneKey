@@ -1786,6 +1786,7 @@ struct Index {
             accentColor: this.accentColor,
             isDark: this.isDark,
             navBottomPad: 60 + this.navSafeBottom + 16,
+            isActive: this.currentTab === 1,
             onAdd: (brand: string, account: string, secret: string) => {
               this.addToken(brand, account, secret);
             },

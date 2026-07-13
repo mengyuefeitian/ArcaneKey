@@ -54,7 +54,7 @@ export const BRAND_ICONS: BrandIconConfig[] = [
   { id: 'microsoft', officialName: 'Microsoft', iconFile: 'microsoft.svg', matchKeywords: ['microsoft', 'outlook', 'office365'] },
   { id: 'nvidia', officialName: 'NVIDIA', iconFile: 'nvidia.svg', matchKeywords: ['nvidia', 'nvdia', '英伟达'] },
   { id: 'okta', officialName: 'Okta', iconFile: 'okta.svg', matchKeywords: ['okta'], scale: 1.3 },
-  { id: 'openai', officialName: 'OpenAI', iconFile: 'openai.svg', matchKeywords: ['openai', 'chatgpt'] },
+  { id: 'openai', officialName: 'OpenAI', iconFile: 'openai.svg', matchKeywords: ['openai', 'chatgpt'], scale: 1.3 },
   { id: 'paypal', officialName: 'PayPal', iconFile: 'paypal.svg', matchKeywords: ['paypal'] },
   { id: 'snapchat', officialName: 'Snapchat', iconFile: 'snapchat.svg', matchKeywords: ['snapchat'] },
   { id: 'steam', officialName: 'Steam', iconFile: 'steam.svg', matchKeywords: ['steam', 'stream'], scale: 1.3 },
