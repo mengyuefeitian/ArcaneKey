@@ -1,5 +1,4 @@
-import cloud from '@hw-agconnect/cloud';
-import { DatabaseCollection } from '@hw-agconnect/cloud';
+import cloud, { Database, DatabaseCollection } from '@hw-agconnect/cloud';
 import { SyncToken } from '../model/Token';
 import { encryptFieldForCloud, decryptFieldForCloud } from './CryptoUtil';
 
@@ -54,7 +53,7 @@ export function setCloudUserId(userId: string): void {
 
 export async function initCloudDB(): Promise<boolean> {
   try {
-    const db = cloud.database({
+    const db: Database = cloud.database({
       objectTypeInfo: {
         schemaVersion: 6,
         objectTypes: [

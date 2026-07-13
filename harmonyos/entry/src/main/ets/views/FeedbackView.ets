@@ -1,6 +1,6 @@
 import { pasteboard } from '@kit.BasicServicesKit';
 import promptAction from '@ohos.promptAction';
-import cloud from '@hw-agconnect/cloud';
+import cloud, { FunctionResult } from '@hw-agconnect/cloud';
 
 // 云函数返回值接口
 interface CloudResultValue {
@@ -10,7 +10,7 @@ interface CloudResultValue {
 
 // 通过 AGC 云函数发送反馈（推荐方式）
 async function cloudSendFeedback(type: string, content: string, contactInfo: string): Promise<void> {
-  const result = await cloud.callFunction({
+  const result: FunctionResult = await cloud.callFunction({
     name: 'send-feedback',
     version: '$latest',
     params: { type: type, content: content, contactInfo: contactInfo },

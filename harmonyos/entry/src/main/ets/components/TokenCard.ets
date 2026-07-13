@@ -91,6 +91,7 @@ export struct TokenCard {
             Text(fmt(this.otp.current).charAt(6)).fontSize(30).fontWeight(700).fontFamily('monospace')
               .fontColor(this.interpolateColor(this.accentColor, 1.0))
           }
+          .onClick(() => this.onCopy(this.otp.current, this.token.brand))
           Blank()
           Column({ space: 2 }) {
             Row({ space: 3 }) {
@@ -106,10 +107,10 @@ export struct TokenCard {
             }
           }
           .alignItems(HorizontalAlign.End)
+          .onClick(() => this.onCopy(this.otp.next, this.token.brand))
         }
         .width('100%')
         .padding({ left: 16, right: 16, top: 11, bottom: 14 })
-        .onClick(() => this.onCopy(this.otp.current, this.token.brand))
       }
       .width('100%')
       .borderRadius(18)

@@ -8,7 +8,7 @@ import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -18,6 +18,8 @@ import { ProfileView } from '../views/ProfileView';
 import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
+import { SecurityView } from '../views/SecurityView';
+import { authenticateSecurity } from '../utils/SecurityUtil';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -87,6 +89,7 @@ struct Index {
   @State @Watch('onIsMemberChanged') isMember: boolean = false;
   @State boundAccount: string = '';
   @State memberAvatarLoadFailed: boolean = false;
+  @State cloudSyncEnabled: boolean = false;
 
   // ── Edit Secret Visibility ──────────────────────────────────────
   @State editSecretVisible: boolean = false;
@@ -102,6 +105,13 @@ struct Index {
   // ── Feedback & Membership Modals ────────────────────────────────
   @State showFeedback: boolean = false;
   @State showMembership: boolean = false;
+
+  // ── Security Settings ───────────────────────────────────────────
+  @State showSecurity: boolean = false;
+  @State securityMode: SecurityMode = 'off';
+  @State securityLocked: boolean = false;
+  // EntryAbility.onForeground bumps this; @Watch re-locks when security is on
+  @StorageLink('appForegroundSeq') @Watch('onForegroundSeqChanged') foregroundSeq: number = 0;
 
   // ── Search ──────────────────────────────────────────────────────
   @State searching: boolean = false;
@@ -123,6 +133,7 @@ struct Index {
   private cdTimer: number = -1;
   private autoSyncTimer: number = -1;
   private pendingCloudInit: boolean = false;
+  private securityUnlocking: boolean = false;
 
   // Mirrors AppStorage['agcAuthReady']; @Watch fires when EntryAbility finishes signInAnonymously()
   @StorageProp('agcAuthReady') @Watch('onAgcAuthReady') agcAuthReady_: boolean = false;
@@ -147,6 +158,32 @@ struct Index {
     if (!this.agcAuthReady_ || !this.pendingCloudInit) return;
     this.pendingCloudInit = false;
     this.doCloudInit();
+  }
+
+  // Called by @Watch when EntryAbility.onForeground bumps appForegroundSeq
+  private onForegroundSeqChanged(): void {
+    if (this.securityMode !== 'off' && this.loggedIn) {
+      this.securityLocked = true;
+      this.runSecurityUnlock();
+    }
+  }
+
+  private async runSecurityUnlock(): Promise<void> {
+    if (this.securityMode === 'off' || !this.loggedIn) {
+      this.securityLocked = false;
+      return;
+    }
+    // Debounce: cold start can fire loadData unlock + onForeground seq together
+    if (this.securityUnlocking) {
+      return;
+    }
+    this.securityUnlocking = true;
+    try {
+      const ok = await authenticateSecurity(this.securityMode);
+      this.securityLocked = !ok;
+    } finally {
+      this.securityUnlocking = false;
+    }
   }
 
   // Called by @Watch whenever isMember is assigned (cold start already-member,
@@ -183,6 +220,10 @@ struct Index {
   // exits (returns false) when no overlay is open — i.e. at the true
   // top level (home tab, no modals).
   onBackPress(): boolean {
+    // zIndex 900 — app lock overlay: stay locked, do not exit
+    if (this.securityLocked) {
+      return true;
+    }
     // zIndex 999 — delete confirmation dialog can be open on top of EditModal
     if (this.showDeleteConfirm) {
       this.showDeleteConfirm = false;
@@ -200,6 +241,10 @@ struct Index {
     }
     if (this.showFeedback) {
       this.showFeedback = false;
+      return true;
+    }
+    if (this.showSecurity) {
+      this.showSecurity = false;
       return true;
     }
     if (this.showLogin) {
@@ -298,9 +343,12 @@ struct Index {
       if (theme) { this.accentColor = theme.color; this.currentTheme = theme; }
       this.isDark = await loadThemeMode();
       this.updateStatusBarColor();
+      this.securityMode = await loadSecurityMode();
       const member: MemberData = await loadMember();
-      this.isMember = member.isMember;
       this.boundAccount = member.boundAccount;
+      // Load sync pref BEFORE assigning isMember so @Watch → startAutoSync sees the gate
+      this.cloudSyncEnabled = await loadCloudSyncEnabled(member.isMember);
+      this.isMember = member.isMember;
 
       this.refreshOtp();
       // isMember was just assigned above (or below, on restore) — the @Watch on
@@ -313,10 +361,17 @@ struct Index {
             if (!member.isMember) {
               await saveMember(true, member.boundAccount);
             }
-            this.isMember = true;
             this.boundAccount = member.boundAccount;
+            this.cloudSyncEnabled = await loadCloudSyncEnabled(true);
+            this.isMember = true;
           }
         } catch (_) {}
+      }
+
+      // Cold start: lock until biometric / lock-screen auth succeeds
+      if (this.securityMode !== 'off' && this.loggedIn) {
+        this.securityLocked = true;
+        this.runSecurityUnlock();
       }
     } catch (_) {
       this.tokens = INITIAL_TOKENS.slice();
@@ -382,8 +437,8 @@ struct Index {
     this.refreshOtp();
     this.currentTab = 0;
     this.toast(`已添加 ${brand}`);
-    if (this.isMember) {
-      // Fire-and-forget async backup
+    if (this.isMember && this.cloudSyncEnabled) {
+      // Fire-and-forget async backup (gated by cloud-sync toggle)
       this.cloudBackup();
     }
   }
@@ -399,7 +454,7 @@ struct Index {
     });
     saveTokens(this.tokens);
     this.refreshOtp();
-    if (this.isMember && this.loggedIn) {
+    if (this.isMember && this.cloudSyncEnabled && this.loggedIn) {
       const updated = this.tokens.find((t: Token): boolean => t.id === id);
       if (updated) {
         updateToken(updated).catch((e: Error) => console.error('[Index] cloudUpdate failed:', e.message));
@@ -592,7 +647,7 @@ struct Index {
     } else {
       this.toast(`成功导入 ${actualToAdd.length} 个账号`);
     }
-    if (this.isMember && this.loggedIn) { this.cloudBackup(); }
+    if (this.isMember && this.cloudSyncEnabled && this.loggedIn) { this.cloudBackup(); }
   }
 
   private doImport(): void {
@@ -769,11 +824,22 @@ struct Index {
   }
 
   private startAutoSync(): void {
-    if (!this.isMember) return;
+    if (!this.isMember || !this.cloudSyncEnabled) return;
 
     startAutoSync(async () => {
       await this.cloudBackup();
     });
+  }
+
+  private async onCloudSyncToggle(on: boolean): Promise<void> {
+    if (!this.isMember) return;
+    this.cloudSyncEnabled = on;
+    await saveCloudSyncEnabled(on);
+    if (on) {
+      this.startAutoSync();
+    } else {
+      stopAutoSync();
+    }
   }
 
   private async buyMembership(): Promise<void> {
@@ -788,6 +854,8 @@ struct Index {
       await checkSandboxStatus(ctx);
       const tokenResult = await launchPurchase(ctx);
       await saveMember(true, this.userName, this.userOpenId);
+      this.cloudSyncEnabled = true;
+      await saveCloudSyncEnabled(true);
       this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
       this.boundAccount = this.userName;
       this.toast('开通成功');
@@ -827,6 +895,8 @@ struct Index {
       if (result) {
         const bound = this.userName || this.boundAccount;
         await saveMember(true, bound, this.userOpenId);
+        this.cloudSyncEnabled = true;
+        await saveCloudSyncEnabled(true);
         this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
         this.boundAccount = bound;
         this.toast('会员已恢复');
@@ -1358,6 +1428,33 @@ struct Index {
   }
 
   @Builder
+  cloudSyncToggleRow() {
+    Row() {
+      Column({ space: 2 }) {
+        Text('云同步').fontSize(14).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+        Text(this.isMember ? '关闭后仅保留本地，仍可手动备份' : '开通会员后可用')
+          .fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Toggle({ type: ToggleType.Switch, isOn: this.isMember ? this.cloudSyncEnabled : false })
+        .selectedColor(this.accentColor)
+        .enabled(this.isMember)
+        .onChange((on: boolean) => {
+          this.onCloudSyncToggle(on);
+        })
+    }
+    .width('100%')
+    .padding(14)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(this.c('#191920', '#FFFFFF'))
+    .borderRadius(14)
+    .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
+    .opacity(this.isMember ? 1 : 0.4)
+  }
+
+  @Builder
   themeModal() {
     Column() {
       this.modalHeader('皮肤主题', () => { this.showTheme = false; })
@@ -1474,6 +1571,7 @@ struct Index {
             .alignItems(HorizontalAlign.Start)
 
             this.memberBenefits()
+            this.cloudSyncToggleRow()
 
           } else {
             // ── 共用：icon + 价格 ─────────────────────────────────────
@@ -1492,6 +1590,7 @@ struct Index {
 
             // ── 共用：权益列表 ────────────────────────────────────────
             this.memberBenefits()
+            this.cloudSyncToggleRow()
 
             if (!this.loggedIn) {
               // ── 状态 1：未登录 ──────────────────────────────────────
@@ -1597,6 +1696,7 @@ struct Index {
             this.userAvatar = '';
             this.userOpenId = '';
             this.harmonyLogin = false;
+            this.securityLocked = false;
             saveLogin(false, '', '', '', false);
             stopAutoSync();
             this.toast('已退出登录');
@@ -1610,6 +1710,41 @@ struct Index {
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
+  }
+
+  // ── Builder: Security lock overlay ──────────────────────────────
+  @Builder
+  securityLockOverlay() {
+    Column({ space: 16 }) {
+      Text('🔒')
+        .fontSize(48)
+      Text('验证以继续')
+        .fontSize(20)
+        .fontWeight(700)
+        .fontColor(this.c('#eeeef5', '#2C1810'))
+      Text('请完成身份验证以解锁应用')
+        .fontSize(13)
+        .fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
+        .margin({ bottom: 8 })
+      Button('点击重试')
+        .width(200)
+        .height(48)
+        .borderRadius(14)
+        .backgroundColor(this.accentColor)
+        .fontColor('#fff')
+        .fontSize(15)
+        .fontWeight(650)
+        .onClick(() => {
+          this.runSecurityUnlock();
+        })
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor(this.c('#0d0d12', '#FAF7F2'))
+    .position({ x: 0, y: 0 })
+    .zIndex(900)
   }
 
   // ── Build ───────────────────────────────────────────────────────
@@ -1651,6 +1786,7 @@ struct Index {
             accentColor: this.accentColor,
             isDark: this.isDark,
             navBottomPad: 60 + this.navSafeBottom + 16,
+            isActive: this.currentTab === 1,
             onAdd: (brand: string, account: string, secret: string) => {
               this.addToken(brand, account, secret);
             },
@@ -1687,6 +1823,7 @@ struct Index {
               this.userAvatar = '';
               this.userOpenId = '';
               this.harmonyLogin = false;
+              this.securityLocked = false;
               saveLogin(false, '', '', '', false);
               stopAutoSync();
               this.toast('已退出登录');
@@ -1703,6 +1840,14 @@ struct Index {
             onAccountTap: () => { this.showAccountInfo = true; },
             onMembershipTap: () => { this.showMembership = true; },
             onFeedbackTap: () => { this.showFeedback = true; },
+            onSecurityTap: () => {
+              if (!this.loggedIn) {
+                this.toast('请先登录');
+                this.showLogin = true;
+                return;
+              }
+              this.showSecurity = true;
+            },
             onToggleMode: () => {
               this.isDark = !this.isDark;
               saveThemeMode(this.isDark);
@@ -1740,6 +1885,18 @@ struct Index {
       if (this.showTheme)  { this.themeModal() }
       if (this.showAccountInfo) { this.accountInfoModal() }
       if (this.showMembership) { this.membershipModal() }
+      if (this.showSecurity) {
+        SecurityView({
+          accentColor: this.accentColor,
+          isDark: this.isDark,
+          mode: this.securityMode,
+          onModeChange: (m: SecurityMode) => { this.securityMode = m; },
+          onClose: () => { this.showSecurity = false; },
+          onUnavailable: (msg: string) => { this.toast(msg); }
+        })
+          .position({ x: 0, y: 0 })
+          .zIndex(400)
+      }
       if (this.showFeedback) {
         FeedbackView({
           accentColor: this.accentColor,
@@ -1767,6 +1924,11 @@ struct Index {
         .width('100%').height('100%').backgroundColor('rgba(0,0,0,0.6)')
         .alignItems(HorizontalAlign.Center).justifyContent(FlexAlign.Center)
         .zIndex(999)
+      }
+
+      // ── App lock (cold start / return to foreground) ────────────
+      if (this.securityLocked) {
+        this.securityLockOverlay()
       }
 
       // ── Toast ───────────────────────────────────────────────────

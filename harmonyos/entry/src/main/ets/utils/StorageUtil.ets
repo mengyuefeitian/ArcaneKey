@@ -146,3 +146,53 @@ export async function saveThemeMode(isDark: boolean): Promise<void> {
     await pref.flush();
   } catch (_) {}
 }
+
+const CLOUD_SYNC_KEY = 'ak_cloud_sync';
+
+export async function loadCloudSyncEnabled(isMember: boolean): Promise<boolean> {
+  try {
+    if (!pref) return isMember;
+    // Empty-string default marks "unset" so members default on, non-members off
+    const val = await pref.get(CLOUD_SYNC_KEY, '');
+    if (val === '' || val === null || val === undefined) {
+      return isMember;
+    }
+    if (typeof val === 'boolean') return val as boolean;
+    if (typeof val === 'string') return val === 'true' || val === '1';
+    return isMember;
+  } catch (_) {
+    return isMember;
+  }
+}
+
+export async function saveCloudSyncEnabled(enabled: boolean): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(CLOUD_SYNC_KEY, enabled);
+    await pref.flush();
+  } catch (_) {}
+}
+
+export type SecurityMode = 'off' | 'face' | 'fingerprint' | 'lock';
+
+const SECURITY_MODE_KEY = 'ak_security_mode';
+
+export async function loadSecurityMode(): Promise<SecurityMode> {
+  try {
+    if (!pref) return 'off';
+    const val = await pref.get(SECURITY_MODE_KEY, 'off');
+    const s = String(val);
+    if (s === 'face' || s === 'fingerprint' || s === 'lock') return s;
+    return 'off';
+  } catch (_) {
+    return 'off';
+  }
+}
+
+export async function saveSecurityMode(mode: SecurityMode): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(SECURITY_MODE_KEY, mode);
+    await pref.flush();
+  } catch (_) {}
+}
