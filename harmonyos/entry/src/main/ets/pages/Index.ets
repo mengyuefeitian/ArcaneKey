@@ -38,6 +38,13 @@ interface DecorativeIcon {
   size: number;
 }
 
+interface IconRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 @Entry
 @Component
 struct Index {
@@ -217,18 +224,86 @@ struct Index {
     }
   }
 
+  // Places icons in screen-vp space so they can be kept clear of the centered
+  // logo/title/status/retry-link block and of each other; leftPercent/topPercent
+  // stored on DecorativeIcon are only for the builder's percent-based .position().
   private randomizeDecorativeIcons(): void {
     const count = 6 + Math.floor(Math.random() * 5); // 6–10 inclusive
     const pool = BRAND_ICONS.slice();
     const picked: DecorativeIcon[] = [];
+
+    let screenWidth = 360;
+    let screenHeight = 780;
+    try {
+      const screen = display.getDefaultDisplaySync();
+      if (screen.densityPixels > 0) {
+        screenWidth = screen.width / screen.densityPixels;
+        screenHeight = screen.height / screen.densityPixels;
+      }
+    } catch (_) {}
+
+    // Center exclusion zone: covers the logo + title + status text + retry link.
+    const exclusionWidth = Math.min(screenWidth * 0.7, 300);
+    const exclusionHeight = Math.min(screenHeight * 0.42, 320);
+    const exclusion: IconRect = {
+      left: (screenWidth - exclusionWidth) / 2,
+      top: (screenHeight - exclusionHeight) / 2,
+      right: (screenWidth + exclusionWidth) / 2,
+      bottom: (screenHeight + exclusionHeight) / 2
+    };
+
+    const placedRects: IconRect[] = [];
+    const gap = 6; // vp spacing kept between icons
+    const maxAttempts = 24;
+
     for (let i = 0; i < count && pool.length > 0; i++) {
       const idx = Math.floor(Math.random() * pool.length);
       const cfg: BrandIconConfig = pool.splice(idx, 1)[0];
+      const size = 32 + Math.round(Math.random() * 24);
+
+      let foundLeft = -1;
+      let foundTop = -1;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const leftVp = Math.random() * Math.max(screenWidth - size, 0);
+        const topVp = Math.random() * Math.max(screenHeight - size, 0);
+        const rect: IconRect = { left: leftVp, top: topVp, right: leftVp + size, bottom: topVp + size };
+
+        const overlapsExclusion = rect.left < exclusion.right && rect.right > exclusion.left &&
+          rect.top < exclusion.bottom && rect.bottom > exclusion.top;
+        if (overlapsExclusion) {
+          continue;
+        }
+
+        let overlapsIcon = false;
+        for (let j = 0; j < placedRects.length; j++) {
+          const other: IconRect = placedRects[j];
+          if (rect.left - gap < other.right && rect.right + gap > other.left &&
+              rect.top - gap < other.bottom && rect.bottom + gap > other.top) {
+            overlapsIcon = true;
+            break;
+          }
+        }
+        if (overlapsIcon) {
+          continue;
+        }
+
+        foundLeft = leftVp;
+        foundTop = topVp;
+        break;
+      }
+
+      // No collision-free spot found within budget — skip this icon rather
+      // than force an overlap; the count is a target range, not a guarantee.
+      if (foundLeft < 0) {
+        continue;
+      }
+
+      placedRects.push({ left: foundLeft, top: foundTop, right: foundLeft + size, bottom: foundTop + size });
       picked.push({
         iconFile: cfg.iconFile,
-        leftPercent: Math.round(Math.random() * 85),
-        topPercent: Math.round(Math.random() * 85),
-        size: 32 + Math.round(Math.random() * 24)
+        leftPercent: (foundLeft / screenWidth) * 100,
+        topPercent: (foundTop / screenHeight) * 100,
+        size: size
       });
     }
     this.decorativeIcons = picked;
