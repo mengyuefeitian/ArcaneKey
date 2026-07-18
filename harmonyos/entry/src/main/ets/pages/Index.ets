@@ -8,7 +8,7 @@ import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -110,6 +110,8 @@ struct Index {
   @State showSecurity: boolean = false;
   @State securityMode: SecurityMode = 'off';
   @State securityLocked: boolean = false;
+  @State lockFallbackEnabled: boolean = true;
+  @State securityAuthFailed: boolean = false;
   // EntryAbility.onForeground bumps this; @Watch re-locks when security is on
   @StorageLink('appForegroundSeq') @Watch('onForegroundSeqChanged') foregroundSeq: number = 0;
 
@@ -171,6 +173,7 @@ struct Index {
   private async runSecurityUnlock(): Promise<void> {
     if (this.securityMode === 'off' || !this.loggedIn) {
       this.securityLocked = false;
+      this.securityAuthFailed = false;
       return;
     }
     // Debounce: cold start can fire loadData unlock + onForeground seq together
@@ -178,9 +181,27 @@ struct Index {
       return;
     }
     this.securityUnlocking = true;
+    this.securityAuthFailed = false;
     try {
       const ok = await authenticateSecurity(this.securityMode);
       this.securityLocked = !ok;
+      this.securityAuthFailed = !ok;
+    } finally {
+      this.securityUnlocking = false;
+    }
+  }
+
+  private async runLockFallbackUnlock(): Promise<void> {
+    if (this.securityUnlocking) {
+      return;
+    }
+    this.securityUnlocking = true;
+    try {
+      const ok = await authenticateSecurity('lock');
+      this.securityLocked = !ok;
+      if (ok) {
+        this.securityAuthFailed = false;
+      }
     } finally {
       this.securityUnlocking = false;
     }
@@ -344,6 +365,7 @@ struct Index {
       this.isDark = await loadThemeMode();
       this.updateStatusBarColor();
       this.securityMode = await loadSecurityMode();
+      this.lockFallbackEnabled = await loadLockFallbackEnabled();
       const member: MemberData = await loadMember();
       this.boundAccount = member.boundAccount;
       // Load sync pref BEFORE assigning isMember so @Watch → startAutoSync sees the gate
@@ -1697,6 +1719,7 @@ struct Index {
             this.userOpenId = '';
             this.harmonyLogin = false;
             this.securityLocked = false;
+            this.securityAuthFailed = false;
             saveLogin(false, '', '', '', false);
             stopAutoSync();
             this.toast('已退出登录');
@@ -1824,6 +1847,7 @@ struct Index {
               this.userOpenId = '';
               this.harmonyLogin = false;
               this.securityLocked = false;
+              this.securityAuthFailed = false;
               saveLogin(false, '', '', '', false);
               stopAutoSync();
               this.toast('已退出登录');
@@ -1891,6 +1915,11 @@ struct Index {
           isDark: this.isDark,
           mode: this.securityMode,
           onModeChange: (m: SecurityMode) => { this.securityMode = m; },
+          lockFallbackEnabled: this.lockFallbackEnabled,
+          onLockFallbackChange: (enabled: boolean) => {
+            this.lockFallbackEnabled = enabled;
+            saveLockFallbackEnabled(enabled);
+          },
           onClose: () => { this.showSecurity = false; },
           onUnavailable: (msg: string) => { this.toast(msg); }
         })
