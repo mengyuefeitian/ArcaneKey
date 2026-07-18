@@ -1425,6 +1425,7 @@ struct Index {
 
         Column({ space: 6 }) {
           Text('备份内容（粘贴加密或 OTP 文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          Text('支持Proton Authenticator备份文件或格式明文导入').fontSize(11).fontColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
           TextArea({ text: this.importText, placeholder: '粘贴备份内容，或粘贴 otpauth:// 格式内容…' })
             .onChange((v) => { this.importText = v; })
             .height(120).backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))

@@ -304,7 +304,7 @@ export struct AboutView {
                   }.alignItems(HorizontalAlign.Start).flexGrow(1)
                   Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
                 }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-                .onClick(() => { this.openUrl('https://www.xiaoanhome.xyz'); })
+                .onClick(() => { this.openUrl('https://www.xiaoanhome.xyz/arcanekey'); })
                 Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
               }
               // 备案
