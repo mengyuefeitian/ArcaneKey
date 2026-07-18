@@ -7,6 +7,7 @@ import { preferences } from '@kit.ArkData';
 import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
+import { BRAND_ICONS, BrandIconConfig } from '../model/BrandIcons';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
@@ -28,6 +29,13 @@ interface SaveOptions {
 
 interface IapError {
   code: number;
+}
+
+interface DecorativeIcon {
+  iconFile: string;
+  leftPercent: number;
+  topPercent: number;
+  size: number;
 }
 
 @Entry
@@ -112,6 +120,7 @@ struct Index {
   @State securityLocked: boolean = false;
   @State lockFallbackEnabled: boolean = true;
   @State securityAuthFailed: boolean = false;
+  @State decorativeIcons: DecorativeIcon[] = [];
   // EntryAbility.onForeground bumps this; @Watch re-locks when security is on
   @StorageLink('appForegroundSeq') @Watch('onForegroundSeqChanged') foregroundSeq: number = 0;
 
@@ -166,6 +175,7 @@ struct Index {
   private onForegroundSeqChanged(): void {
     if (this.securityMode !== 'off' && this.loggedIn) {
       this.securityLocked = true;
+      this.randomizeDecorativeIcons();
       this.runSecurityUnlock();
     }
   }
@@ -205,6 +215,23 @@ struct Index {
     } finally {
       this.securityUnlocking = false;
     }
+  }
+
+  private randomizeDecorativeIcons(): void {
+    const count = 6 + Math.floor(Math.random() * 5); // 6–10 inclusive
+    const pool = BRAND_ICONS.slice();
+    const picked: DecorativeIcon[] = [];
+    for (let i = 0; i < count && pool.length > 0; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      const cfg: BrandIconConfig = pool.splice(idx, 1)[0];
+      picked.push({
+        iconFile: cfg.iconFile,
+        leftPercent: Math.round(Math.random() * 85),
+        topPercent: Math.round(Math.random() * 85),
+        size: 32 + Math.round(Math.random() * 24)
+      });
+    }
+    this.decorativeIcons = picked;
   }
 
   // Called by @Watch whenever isMember is assigned (cold start already-member,
@@ -393,6 +420,7 @@ struct Index {
       // Cold start: lock until biometric / lock-screen auth succeeds
       if (this.securityMode !== 'off' && this.loggedIn) {
         this.securityLocked = true;
+        this.randomizeDecorativeIcons();
         this.runSecurityUnlock();
       }
     } catch (_) {
@@ -1738,33 +1766,61 @@ struct Index {
   // ── Builder: Security lock overlay ──────────────────────────────
   @Builder
   securityLockOverlay() {
-    Column({ space: 16 }) {
-      Text('🔒')
-        .fontSize(48)
-      Text('验证以继续')
-        .fontSize(20)
-        .fontWeight(700)
-        .fontColor(this.c('#eeeef5', '#2C1810'))
-      Text('请完成身份验证以解锁应用')
-        .fontSize(13)
-        .fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
-        .margin({ bottom: 8 })
-      Button('点击重试')
-        .width(200)
-        .height(48)
-        .borderRadius(14)
-        .backgroundColor(this.accentColor)
-        .fontColor('#fff')
-        .fontSize(15)
-        .fontWeight(650)
-        .onClick(() => {
-          this.runSecurityUnlock();
-        })
+    Stack() {
+      // Decorative brand-icon backdrop
+      ForEach(this.decorativeIcons, (icon: DecorativeIcon, index: number) => {
+        Image($rawfile('brand-icons/' + icon.iconFile))
+          .width(icon.size)
+          .height(icon.size)
+          .opacity(0.08)
+          .position({ x: `${icon.leftPercent}%`, y: `${icon.topPercent}%` })
+      }, (icon: DecorativeIcon, index: number) => `decor-${index}-${icon.iconFile}`)
+
+      // Center content
+      Column({ space: 16 }) {
+        Image($r('app.media.logo_img'))
+          .width(88).height(88).borderRadius(20)
+          .shadow({ radius: 24, color: this.accentColor + '55', offsetX: 0, offsetY: 6 })
+        Text('星枢令已锁定')
+          .fontSize(20)
+          .fontWeight(700)
+          .fontColor(this.c('#eeeef5', '#2C1810'))
+        Text(this.securityAuthFailed ? '验证失败，请重试' : '正在验证…')
+          .fontSize(13)
+          .fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
+        Text('重新验证')
+          .fontSize(13)
+          .fontColor(this.accentColor)
+          .onClick(() => {
+            this.runSecurityUnlock();
+          })
+      }
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+
+      // Bottom fallback "解锁" button
+      if (this.lockFallbackEnabled && (this.securityMode === 'face' || this.securityMode === 'fingerprint')) {
+        Column() {
+          Button('解锁')
+            .width('100%')
+            .height(50)
+            .borderRadius(15)
+            .backgroundColor(this.securityAuthFailed ? this.accentColor : this.c('#191920', '#F5F0EA'))
+            .fontColor(this.securityAuthFailed ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+            .fontSize(15)
+            .fontWeight(650)
+            .enabled(this.securityAuthFailed)
+            .onClick(() => {
+              this.runLockFallbackUnlock();
+            })
+        }
+        .width('100%')
+        .padding({ left: 20, right: 20, bottom: 50 })
+        .align(Alignment.Bottom)
+      }
     }
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
     .backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .position({ x: 0, y: 0 })
     .zIndex(900)
