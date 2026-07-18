@@ -159,7 +159,7 @@ export struct ProfileView {
                 .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text('导入备份').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                Text(this.isMember ? '从本地备份恢复' : '会员专属')
+                Text(this.isMember ? '从本地存储恢复或快速批量导入' : '会员专属')
                   .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
               Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
