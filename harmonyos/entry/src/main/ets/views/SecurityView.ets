@@ -13,16 +13,20 @@ export struct SecurityView {
   @State private faceOn: boolean = false;
   @State private fingerprintOn: boolean = false;
   @State private lockOn: boolean = false;
+  @Prop lockFallbackEnabled: boolean = true;
+  @State private fallbackOn: boolean = true;
   // Ignore onChange while we programmatically remount/sync Toggle visuals
   private syncingVisual: boolean = false;
   onModeChange: (mode: SecurityMode) => void = (_m: SecurityMode) => {};
   onClose: () => void = () => {};
   onUnavailable: (msg: string) => void = (_msg: string) => {};
+  onLockFallbackChange: (enabled: boolean) => void = (_e: boolean) => {};
 
   private c(dark: string, light: string): string { return this.isDark ? dark : light; }
 
   aboutToAppear(): void {
     this.applyModeVisual(this.mode);
+    this.fallbackOn = this.lockFallbackEnabled;
   }
 
   private onModePropChanged(): void {
@@ -99,6 +103,11 @@ export struct SecurityView {
     }
   }
 
+  private onFallbackToggleChange(on: boolean): void {
+    this.fallbackOn = on;
+    this.onLockFallbackChange(on);
+  }
+
   build() {
     Column() {
       // Header
@@ -164,6 +173,29 @@ export struct SecurityView {
               }
               .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
               .alignItems(VerticalAlign.Center)
+              if (this.mode === 'face' || this.mode === 'fingerprint') {
+                Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1)
+                  .margin({ left: 16, right: 16 })
+              }
+            }
+            // 解锁失败时启用锁屏密码解锁 (only when primary mode is face/fingerprint)
+            if (this.mode === 'face' || this.mode === 'fingerprint') {
+              Column() {
+                Row() {
+                  Text('解锁失败时启用锁屏密码解锁')
+                    .fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
+                    .layoutWeight(1)
+                  Toggle({ type: ToggleType.Switch, isOn: this.fallbackOn })
+                    .selectedColor(this.accentColor)
+                    .enabled(isSecurityTypeAvailable('lock'))
+                    .onChange((on: boolean) => {
+                      this.onFallbackToggleChange(on);
+                    })
+                }
+                .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+                .alignItems(VerticalAlign.Center)
+                .opacity(isSecurityTypeAvailable('lock') ? 1 : 0.5)
+              }
             }
           }
           .width('100%')
@@ -179,6 +211,14 @@ export struct SecurityView {
           .width('100%')
           .padding({ left: 4, right: 4 })
           .lineHeight(18)
+        if ((this.mode === 'face' || this.mode === 'fingerprint') && !isSecurityTypeAvailable('lock')) {
+          Text('锁屏密码未设置')
+            .fontSize(12)
+            .fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
+            .width('100%')
+            .padding({ left: 4, right: 4 })
+            .lineHeight(18)
+        }
       }
       .width('100%')
       .padding({ left: 20, right: 20, top: 20 })

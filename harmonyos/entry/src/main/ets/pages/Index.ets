@@ -7,8 +7,9 @@ import { preferences } from '@kit.ArkData';
 import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
+import { BRAND_ICONS, BrandIconConfig } from '../model/BrandIcons';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -19,7 +20,7 @@ import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
 import { SecurityView } from '../views/SecurityView';
-import { authenticateSecurity } from '../utils/SecurityUtil';
+import { authenticateSecurity, isSecurityTypeAvailable } from '../utils/SecurityUtil';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -28,6 +29,20 @@ interface SaveOptions {
 
 interface IapError {
   code: number;
+}
+
+interface DecorativeIcon {
+  iconFile: string;
+  leftPercent: number;
+  topPercent: number;
+  size: number;
+}
+
+interface IconRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
 @Entry
@@ -110,6 +125,9 @@ struct Index {
   @State showSecurity: boolean = false;
   @State securityMode: SecurityMode = 'off';
   @State securityLocked: boolean = false;
+  @State lockFallbackEnabled: boolean = true;
+  @State securityAuthFailed: boolean = false;
+  @State decorativeIcons: DecorativeIcon[] = [];
   // EntryAbility.onForeground bumps this; @Watch re-locks when security is on
   @StorageLink('appForegroundSeq') @Watch('onForegroundSeqChanged') foregroundSeq: number = 0;
 
@@ -164,6 +182,7 @@ struct Index {
   private onForegroundSeqChanged(): void {
     if (this.securityMode !== 'off' && this.loggedIn) {
       this.securityLocked = true;
+      this.randomizeDecorativeIcons();
       this.runSecurityUnlock();
     }
   }
@@ -171,6 +190,7 @@ struct Index {
   private async runSecurityUnlock(): Promise<void> {
     if (this.securityMode === 'off' || !this.loggedIn) {
       this.securityLocked = false;
+      this.securityAuthFailed = false;
       return;
     }
     // Debounce: cold start can fire loadData unlock + onForeground seq together
@@ -178,12 +198,115 @@ struct Index {
       return;
     }
     this.securityUnlocking = true;
+    this.securityAuthFailed = false;
     try {
       const ok = await authenticateSecurity(this.securityMode);
       this.securityLocked = !ok;
+      this.securityAuthFailed = !ok;
     } finally {
       this.securityUnlocking = false;
     }
+  }
+
+  private async runLockFallbackUnlock(): Promise<void> {
+    if (this.securityUnlocking) {
+      return;
+    }
+    this.securityUnlocking = true;
+    try {
+      const ok = await authenticateSecurity('lock');
+      this.securityLocked = !ok;
+      if (ok) {
+        this.securityAuthFailed = false;
+      }
+    } finally {
+      this.securityUnlocking = false;
+    }
+  }
+
+  // Places icons in screen-vp space so they can be kept clear of the centered
+  // logo/title/status/retry-link block and of each other; leftPercent/topPercent
+  // stored on DecorativeIcon are only for the builder's percent-based .position().
+  private randomizeDecorativeIcons(): void {
+    const count = 6 + Math.floor(Math.random() * 5); // 6–10 inclusive
+    const pool = BRAND_ICONS.slice();
+    const picked: DecorativeIcon[] = [];
+
+    let screenWidth = 360;
+    let screenHeight = 780;
+    try {
+      const screen = display.getDefaultDisplaySync();
+      if (screen.densityPixels > 0) {
+        screenWidth = screen.width / screen.densityPixels;
+        screenHeight = screen.height / screen.densityPixels;
+      }
+    } catch (_) {}
+
+    // Center exclusion zone: covers the logo + title + status text + retry link.
+    const exclusionWidth = Math.min(screenWidth * 0.7, 300);
+    const exclusionHeight = Math.min(screenHeight * 0.42, 320);
+    const exclusion: IconRect = {
+      left: (screenWidth - exclusionWidth) / 2,
+      top: (screenHeight - exclusionHeight) / 2,
+      right: (screenWidth + exclusionWidth) / 2,
+      bottom: (screenHeight + exclusionHeight) / 2
+    };
+
+    const placedRects: IconRect[] = [];
+    const gap = 6; // vp spacing kept between icons
+    const maxAttempts = 24;
+
+    for (let i = 0; i < count && pool.length > 0; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      const cfg: BrandIconConfig = pool.splice(idx, 1)[0];
+      const size = 32 + Math.round(Math.random() * 24);
+
+      let foundLeft = -1;
+      let foundTop = -1;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const leftVp = Math.random() * Math.max(screenWidth - size, 0);
+        const topVp = Math.random() * Math.max(screenHeight - size, 0);
+        const rect: IconRect = { left: leftVp, top: topVp, right: leftVp + size, bottom: topVp + size };
+
+        const overlapsExclusion = rect.left < exclusion.right && rect.right > exclusion.left &&
+          rect.top < exclusion.bottom && rect.bottom > exclusion.top;
+        if (overlapsExclusion) {
+          continue;
+        }
+
+        let overlapsIcon = false;
+        for (let j = 0; j < placedRects.length; j++) {
+          const other: IconRect = placedRects[j];
+          if (rect.left - gap < other.right && rect.right + gap > other.left &&
+              rect.top - gap < other.bottom && rect.bottom + gap > other.top) {
+            overlapsIcon = true;
+            break;
+          }
+        }
+        if (overlapsIcon) {
+          continue;
+        }
+
+        foundLeft = leftVp;
+        foundTop = topVp;
+        break;
+      }
+
+      // No collision-free spot found within budget — skip this icon rather
+      // than force an overlap; the count is a target range, not a guarantee.
+      if (foundLeft < 0) {
+        continue;
+      }
+
+      placedRects.push({ left: foundLeft, top: foundTop, right: foundLeft + size, bottom: foundTop + size });
+      picked.push({
+        iconFile: cfg.iconFile,
+        leftPercent: (foundLeft / screenWidth) * 100,
+        topPercent: (foundTop / screenHeight) * 100,
+        size: size
+      });
+    }
+    this.decorativeIcons = picked;
   }
 
   // Called by @Watch whenever isMember is assigned (cold start already-member,
@@ -344,6 +467,7 @@ struct Index {
       this.isDark = await loadThemeMode();
       this.updateStatusBarColor();
       this.securityMode = await loadSecurityMode();
+      this.lockFallbackEnabled = await loadLockFallbackEnabled();
       const member: MemberData = await loadMember();
       this.boundAccount = member.boundAccount;
       // Load sync pref BEFORE assigning isMember so @Watch → startAutoSync sees the gate
@@ -371,6 +495,7 @@ struct Index {
       // Cold start: lock until biometric / lock-screen auth succeeds
       if (this.securityMode !== 'off' && this.loggedIn) {
         this.securityLocked = true;
+        this.randomizeDecorativeIcons();
         this.runSecurityUnlock();
       }
     } catch (_) {
@@ -1375,6 +1500,7 @@ struct Index {
 
         Column({ space: 6 }) {
           Text('备份内容（粘贴加密或 OTP 文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          Text('支持Proton Authenticator备份文件或格式明文导入').fontSize(11).fontColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
           TextArea({ text: this.importText, placeholder: '粘贴备份内容，或粘贴 otpauth:// 格式内容…' })
             .onChange((v) => { this.importText = v; })
             .height(120).backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
@@ -1697,6 +1823,7 @@ struct Index {
             this.userOpenId = '';
             this.harmonyLogin = false;
             this.securityLocked = false;
+            this.securityAuthFailed = false;
             saveLogin(false, '', '', '', false);
             stopAutoSync();
             this.toast('已退出登录');
@@ -1715,33 +1842,62 @@ struct Index {
   // ── Builder: Security lock overlay ──────────────────────────────
   @Builder
   securityLockOverlay() {
-    Column({ space: 16 }) {
-      Text('🔒')
-        .fontSize(48)
-      Text('验证以继续')
-        .fontSize(20)
-        .fontWeight(700)
-        .fontColor(this.c('#eeeef5', '#2C1810'))
-      Text('请完成身份验证以解锁应用')
-        .fontSize(13)
-        .fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
-        .margin({ bottom: 8 })
-      Button('点击重试')
-        .width(200)
-        .height(48)
-        .borderRadius(14)
-        .backgroundColor(this.accentColor)
-        .fontColor('#fff')
-        .fontSize(15)
-        .fontWeight(650)
-        .onClick(() => {
-          this.runSecurityUnlock();
-        })
+    Stack() {
+      // Decorative brand-icon backdrop
+      ForEach(this.decorativeIcons, (icon: DecorativeIcon, index: number) => {
+        Image($rawfile('brand-icons/' + icon.iconFile))
+          .width(icon.size)
+          .height(icon.size)
+          .opacity(0.40)
+          .position({ x: `${icon.leftPercent}%`, y: `${icon.topPercent}%` })
+      }, (icon: DecorativeIcon, index: number) => `decor-${index}-${icon.iconFile}`)
+
+      // Center content
+      Column({ space: 16 }) {
+        Image($r('app.media.logo_img'))
+          .width(128).height(128).borderRadius(28)
+          .shadow({ radius: 28, color: this.accentColor + '55', offsetX: 0, offsetY: 8 })
+        Text('星枢令已锁定')
+          .fontSize(20)
+          .fontWeight(700)
+          .fontColor(this.c('#eeeef5', '#2C1810'))
+        Text(this.securityAuthFailed ? '验证失败，请重试' : '正在验证…')
+          .fontSize(13)
+          .fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
+        Text('重新验证')
+          .fontSize(13)
+          .fontColor(this.accentColor)
+          .onClick(() => {
+            this.runSecurityUnlock();
+          })
+      }
+      .alignItems(HorizontalAlign.Center)
+
+      // Bottom fallback "解锁" button
+      if (this.lockFallbackEnabled && (this.securityMode === 'face' || this.securityMode === 'fingerprint') && isSecurityTypeAvailable('lock')) {
+        Column() {
+          Button('解锁')
+            .width('100%')
+            .height(50)
+            .borderRadius(15)
+            .backgroundColor(this.securityAuthFailed ? this.accentColor : this.c('#191920', '#F5F0EA'))
+            .fontColor(this.securityAuthFailed ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+            .fontSize(15)
+            .fontWeight(650)
+            .enabled(this.securityAuthFailed)
+            .onClick(() => {
+              this.runLockFallbackUnlock();
+            })
+        }
+        .width('100%')
+        .padding({ left: 20, right: 20 })
+        .position({ x: 0, y: '100%' })
+        .markAnchor({ x: 0, y: '100%' })
+        .translate({ y: -50 })
+      }
     }
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
     .backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .position({ x: 0, y: 0 })
     .zIndex(900)
@@ -1824,6 +1980,7 @@ struct Index {
               this.userOpenId = '';
               this.harmonyLogin = false;
               this.securityLocked = false;
+              this.securityAuthFailed = false;
               saveLogin(false, '', '', '', false);
               stopAutoSync();
               this.toast('已退出登录');
@@ -1891,6 +2048,11 @@ struct Index {
           isDark: this.isDark,
           mode: this.securityMode,
           onModeChange: (m: SecurityMode) => { this.securityMode = m; },
+          lockFallbackEnabled: this.lockFallbackEnabled,
+          onLockFallbackChange: (enabled: boolean) => {
+            this.lockFallbackEnabled = enabled;
+            saveLockFallbackEnabled(enabled);
+          },
           onClose: () => { this.showSecurity = false; },
           onUnavailable: (msg: string) => { this.toast(msg); }
         })
