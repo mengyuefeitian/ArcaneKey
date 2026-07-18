@@ -1780,8 +1780,8 @@ struct Index {
       // Center content
       Column({ space: 16 }) {
         Image($r('app.media.logo_img'))
-          .width(88).height(88).borderRadius(20)
-          .shadow({ radius: 24, color: this.accentColor + '55', offsetX: 0, offsetY: 6 })
+          .width(128).height(128).borderRadius(28)
+          .shadow({ radius: 28, color: this.accentColor + '55', offsetX: 0, offsetY: 8 })
         Text('星枢令已锁定')
           .fontSize(20)
           .fontWeight(700)
