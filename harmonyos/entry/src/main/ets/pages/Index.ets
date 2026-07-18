@@ -1773,7 +1773,7 @@ struct Index {
         Image($rawfile('brand-icons/' + icon.iconFile))
           .width(icon.size)
           .height(icon.size)
-          .opacity(0.25)
+          .opacity(0.40)
           .position({ x: `${icon.leftPercent}%`, y: `${icon.topPercent}%` })
       }, (icon: DecorativeIcon, index: number) => `decor-${index}-${icon.iconFile}`)
 
