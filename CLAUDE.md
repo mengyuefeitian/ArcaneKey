@@ -244,6 +244,10 @@ When reporting completion always include:
 
 This repository has a `main` branch with committed history. All source files are currently tracked. The repo root contains a `.DS_Store` file that should be added to `.gitignore`.
 
+### No merge/push without explicit instruction
+
+After finishing development work (including at the end of `superpowers:finishing-a-development-branch`), do **not** merge to another branch and do **not** push to any remote on your own initiative. Do **not** ask "want me to merge?" or "want me to push?" either — stay silent on it. Leave commits on the working branch and wait for an explicit instruction (e.g. "merge to main", "push both branches") before running `git merge`, `git checkout <base>`, or `git push`. This applies even when a skill's own menu offers merge/push as an option — skip straight to reporting what's done and stop there.
+
 ## Infrastructure
 
 No tests, no CI/CD, no linter, no formatter, no package manager, no `.gitignore`, no `README.md`. The miniprogram and HarmonyOS apps rely solely on their platform-specific IDEs (WeChat DevTools, DevEco Studio).
