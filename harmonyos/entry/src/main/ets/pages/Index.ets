@@ -20,7 +20,7 @@ import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
 import { SecurityView } from '../views/SecurityView';
-import { authenticateSecurity } from '../utils/SecurityUtil';
+import { authenticateSecurity, isSecurityTypeAvailable } from '../utils/SecurityUtil';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -1796,11 +1796,10 @@ struct Index {
             this.runSecurityUnlock();
           })
       }
-      .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
 
       // Bottom fallback "解锁" button
-      if (this.lockFallbackEnabled && (this.securityMode === 'face' || this.securityMode === 'fingerprint')) {
+      if (this.lockFallbackEnabled && (this.securityMode === 'face' || this.securityMode === 'fingerprint') && isSecurityTypeAvailable('lock')) {
         Column() {
           Button('解锁')
             .width('100%')
@@ -1816,8 +1815,10 @@ struct Index {
             })
         }
         .width('100%')
-        .padding({ left: 20, right: 20, bottom: 50 })
-        .align(Alignment.Bottom)
+        .padding({ left: 20, right: 20 })
+        .position({ x: 0, y: '100%' })
+        .markAnchor({ x: 0, y: '100%' })
+        .translate({ y: -50 })
       }
     }
     .width('100%')
