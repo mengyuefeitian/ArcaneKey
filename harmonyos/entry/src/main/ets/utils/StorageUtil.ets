@@ -196,3 +196,25 @@ export async function saveSecurityMode(mode: SecurityMode): Promise<void> {
     await pref.flush();
   } catch (_) {}
 }
+
+const LOCK_FALLBACK_KEY = 'ak_lock_fallback_enabled';
+
+export async function loadLockFallbackEnabled(): Promise<boolean> {
+  try {
+    if (!pref) return true;
+    const val = await pref.get(LOCK_FALLBACK_KEY, true);
+    if (typeof val === 'boolean') return val as boolean;
+    if (typeof val === 'string') return val === 'true' || val === '1';
+    return true;
+  } catch (_) {
+    return true;
+  }
+}
+
+export async function saveLockFallbackEnabled(enabled: boolean): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(LOCK_FALLBACK_KEY, enabled);
+    await pref.flush();
+  } catch (_) {}
+}
