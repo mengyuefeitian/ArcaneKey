@@ -5,6 +5,13 @@ export interface Token {
   secret: string;
 }
 
+export interface SyncToken extends Token {
+  is_deleted?: boolean;
+  deleted_at?: string;
+  timestamp?: string;
+  userId?: string;
+}
+
 export interface OtpPair {
   current: string;
   next: string;

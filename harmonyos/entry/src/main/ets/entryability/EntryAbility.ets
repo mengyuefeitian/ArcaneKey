@@ -1,12 +1,34 @@
 import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { initialize } from '@hw-agconnect/hmcore';
+import { util } from '@kit.ArkTS';
+import cloud, { SignInResult } from '@hw-agconnect/cloud';
 
 export default class EntryAbility extends UIAbility {
   private windowStage: window.WindowStage | null = null;
 
-  onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+  async onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): Promise<void> {
     hilog.info(0x0000, 'ArcaneKey', '%{public}s', 'Ability onCreate');
+    // Signal not ready yet so Index.ets defers cloud DB init until auth completes
+    AppStorage.setOrCreate('agcAuthReady', false);
+    AppStorage.setOrCreate('appForegroundSeq', 0);
+    AppStorage.setOrCreate('context', this.context);
+    try {
+      const cfgBytes = await this.context.resourceManager.getRawFileContent('agconnect-services.json');
+      const decoder = new util.TextDecoder('utf-8');
+      initialize(this.context, JSON.parse(decoder.decode(cfgBytes)));
+      hilog.info(0x0000, 'ArcaneKey', '%{public}s', 'AGC SDK initialized');
+      const signInResult: SignInResult = await cloud.auth().signInAnonymously();
+      hilog.info(0x0000, 'ArcaneKey', 'AGC anonymous sign in success, uid=%{public}s',
+        signInResult.getUser().getUid());
+      AppStorage.set('agcAuthReady', true);
+    } catch (e) {
+      const errMsg: string = e instanceof Error ? e.message : String(e);
+      hilog.error(0x0000, 'ArcaneKey', 'AGC init/auth failed: %{public}s', errMsg);
+      // Unblock cloud DB init even on failure — it will surface its own 403 error
+      AppStorage.set('agcAuthReady', true);
+    }
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
@@ -28,11 +50,21 @@ export default class EntryAbility extends UIAbility {
       await mainWindow.setWindowLayoutFullScreen(true);
       // Transparent window background so system light effects can penetrate
       await mainWindow.setWindowBackgroundColor('#00000000');
+      // Use white icons on the dark background so time/battery are visible
+      await mainWindow.setWindowSystemBarProperties({
+        statusBarContentColor: '#FFFFFF',
+        navigationBarContentColor: '#FFFFFF'
+      });
     } catch (err) {
       hilog.error(0x0000, 'ArcaneKey', 'Failed to setup immersive window: %{public}s', JSON.stringify(err));
     }
   }
 
-  onForeground(): void {}
+  onForeground(): void {
+    // Bump sequence so Index @StorageLink/@Watch can re-lock when security is on
+    const prev = AppStorage.get<number>('appForegroundSeq') ?? 0;
+    AppStorage.setOrCreate('appForegroundSeq', prev + 1);
+  }
+
   onBackground(): void {}
 }

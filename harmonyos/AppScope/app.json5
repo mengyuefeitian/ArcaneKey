@@ -1,9 +1,9 @@
 {
   "app": {
-    "bundleName": "com.example.arcankey",
-    "vendor": "example",
-    "versionCode": 1000000,
-    "versionName": "1.0.0",
+    "bundleName": "com.arcanekey.authenticator",
+    "vendor": "arcanekey",
+    "versionCode": 1000299,
+    "versionName": "2.3.0",
     "icon": "$media:app_icon",
     "label": "$string:app_name"
   }

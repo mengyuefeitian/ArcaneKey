@@ -1,27 +1,55 @@
 import { pasteboard } from '@kit.BasicServicesKit';
-import { common } from '@kit.AbilityKit';
+import { authentication } from '@kit.AccountKit';
+import { common, Want } from '@kit.AbilityKit';
+import { window, display } from '@kit.ArkUI';
 import { picker } from '@kit.CoreFileKit';
 import { preferences } from '@kit.ArkData';
 import fs from '@ohos.file.fs';
-import { Token, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, BRAND_COLORS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
+import util from '@ohos.util';
+import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
+import { BRAND_ICONS, BrandIconConfig } from '../model/BrandIcons';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled } from '../utils/StorageUtil';
+import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
+import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
 import { HomeView } from '../views/HomeView';
 import { ScanView } from '../views/ScanView';
 import { ProfileView } from '../views/ProfileView';
 import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
+import { AboutView } from '../views/AboutView';
+import { SecurityView } from '../views/SecurityView';
+import { authenticateSecurity, isSecurityTypeAvailable } from '../utils/SecurityUtil';
+import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
   newFileNames: string[];
+}
+
+interface IapError {
+  code: number;
+}
+
+interface DecorativeIcon {
+  iconFile: string;
+  leftPercent: number;
+  topPercent: number;
+  size: number;
+}
+
+interface IconRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
 @Entry
 @Component
 struct Index {
   // ── Core State ──────────────────────────────────────────────────
-  @State tokens: Token[] = [];
+  @State tokens: SyncToken[] = [];
   @State otpMap: Record<string, OtpPair> = {};
   @State timeLeft_: number = 30;
   @State currentTab: number = 0;
@@ -65,12 +93,18 @@ struct Index {
 
   // ── HarmonyOS Login Flag ────────────────────────────────────────
   @State harmonyLogin: boolean = false;
+  @State userOpenId: string = '';
   @State showAccountInfo: boolean = false;
   @State privacyAgreed: boolean = false;
 
   // ── Membership ──────────────────────────────────────────────────
-  @State isMember: boolean = false;
-  @State memberExpiry: string = '';
+  // @Watch centralizes cloud-sync init: every place that flips isMember to
+  // true (cold start, fresh purchase, restored purchase) triggers it exactly
+  // once here, instead of each call site having to remember to call it.
+  @State @Watch('onIsMemberChanged') isMember: boolean = false;
+  @State boundAccount: string = '';
+  @State memberAvatarLoadFailed: boolean = false;
+  @State cloudSyncEnabled: boolean = false;
 
   // ── Edit Secret Visibility ──────────────────────────────────────
   @State editSecretVisible: boolean = false;
@@ -79,9 +113,23 @@ struct Index {
   @State deleteTarget: Token = {} as Token;
   @State showDeleteConfirm: boolean = false;
 
+  // ── QR Export Modal ─────────────────────────────────────────────
+  @State showQrToken: Token | null = null;
+  @State qrUri: string = '';
+
   // ── Feedback & Membership Modals ────────────────────────────────
   @State showFeedback: boolean = false;
   @State showMembership: boolean = false;
+
+  // ── Security Settings ───────────────────────────────────────────
+  @State showSecurity: boolean = false;
+  @State securityMode: SecurityMode = 'off';
+  @State securityLocked: boolean = false;
+  @State lockFallbackEnabled: boolean = true;
+  @State securityAuthFailed: boolean = false;
+  @State decorativeIcons: DecorativeIcon[] = [];
+  // EntryAbility.onForeground bumps this; @Watch re-locks when security is on
+  @StorageLink('appForegroundSeq') @Watch('onForegroundSeqChanged') foregroundSeq: number = 0;
 
   // ── Search ──────────────────────────────────────────────────────
   @State searching: boolean = false;
@@ -91,10 +139,271 @@ struct Index {
   @State toastMsg: string = '';
   @State toastVisible: boolean = false;
 
+  // ── Navigation safe area (gesture bar height in vp) ─────────────
+  @State navSafeBottom: number = 34;
+  @State isDark: boolean = true;
+  @State showAbout: boolean = false;
+  @State showAgreement: boolean = false;
+  @State showPrivacy: boolean = false;
+
   private timer: number = -1;
   private toastTimer: number = -1;
   private cdTimer: number = -1;
   private autoSyncTimer: number = -1;
+  private pendingCloudInit: boolean = false;
+  private securityUnlocking: boolean = false;
+
+  // Mirrors AppStorage['agcAuthReady']; @Watch fires when EntryAbility finishes signInAnonymously()
+  @StorageProp('agcAuthReady') @Watch('onAgcAuthReady') agcAuthReady_: boolean = false;
+
+  private c(dark: string, light: string): string { return this.isDark ? dark : light; }
+
+  private async updateStatusBarColor(): Promise<void> {
+    try {
+      const ctx = AppStorage.get<common.UIAbilityContext>('context');
+      if (!ctx) return;
+      const win = await window.getLastWindow(ctx);
+      await win.setWindowSystemBarProperties({
+        statusBarContentColor: this.isDark ? '#FFFFFF' : '#000000',
+        navigationBarContentColor: this.isDark ? '#FFFFFF' : '#000000'
+      });
+    } catch (_) {}
+  }
+
+  // Called by @Watch when agcAuthReady_ flips true in AppStorage
+  private onAgcAuthReady(propName: string): void {
+    console.log('[Index] agcAuthReady changed:', propName, this.agcAuthReady_);
+    if (!this.agcAuthReady_ || !this.pendingCloudInit) return;
+    this.pendingCloudInit = false;
+    this.doCloudInit();
+  }
+
+  // Called by @Watch when EntryAbility.onForeground bumps appForegroundSeq
+  private onForegroundSeqChanged(): void {
+    if (this.securityMode !== 'off' && this.loggedIn) {
+      this.securityLocked = true;
+      this.randomizeDecorativeIcons();
+      this.runSecurityUnlock();
+    }
+  }
+
+  private async runSecurityUnlock(): Promise<void> {
+    if (this.securityMode === 'off' || !this.loggedIn) {
+      this.securityLocked = false;
+      this.securityAuthFailed = false;
+      return;
+    }
+    // Debounce: cold start can fire loadData unlock + onForeground seq together
+    if (this.securityUnlocking) {
+      return;
+    }
+    this.securityUnlocking = true;
+    this.securityAuthFailed = false;
+    try {
+      const ok = await authenticateSecurity(this.securityMode);
+      this.securityLocked = !ok;
+      this.securityAuthFailed = !ok;
+    } finally {
+      this.securityUnlocking = false;
+    }
+  }
+
+  private async runLockFallbackUnlock(): Promise<void> {
+    if (this.securityUnlocking) {
+      return;
+    }
+    this.securityUnlocking = true;
+    try {
+      const ok = await authenticateSecurity('lock');
+      this.securityLocked = !ok;
+      if (ok) {
+        this.securityAuthFailed = false;
+      }
+    } finally {
+      this.securityUnlocking = false;
+    }
+  }
+
+  // Places icons in screen-vp space so they can be kept clear of the centered
+  // logo/title/status/retry-link block and of each other; leftPercent/topPercent
+  // stored on DecorativeIcon are only for the builder's percent-based .position().
+  private randomizeDecorativeIcons(): void {
+    const count = 6 + Math.floor(Math.random() * 5); // 6–10 inclusive
+    const pool = BRAND_ICONS.slice();
+    const picked: DecorativeIcon[] = [];
+
+    let screenWidth = 360;
+    let screenHeight = 780;
+    try {
+      const screen = display.getDefaultDisplaySync();
+      if (screen.densityPixels > 0) {
+        screenWidth = screen.width / screen.densityPixels;
+        screenHeight = screen.height / screen.densityPixels;
+      }
+    } catch (_) {}
+
+    // Center exclusion zone: covers the logo + title + status text + retry link.
+    const exclusionWidth = Math.min(screenWidth * 0.7, 300);
+    const exclusionHeight = Math.min(screenHeight * 0.42, 320);
+    const exclusion: IconRect = {
+      left: (screenWidth - exclusionWidth) / 2,
+      top: (screenHeight - exclusionHeight) / 2,
+      right: (screenWidth + exclusionWidth) / 2,
+      bottom: (screenHeight + exclusionHeight) / 2
+    };
+
+    const placedRects: IconRect[] = [];
+    const gap = 6; // vp spacing kept between icons
+    const maxAttempts = 24;
+
+    for (let i = 0; i < count && pool.length > 0; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      const cfg: BrandIconConfig = pool.splice(idx, 1)[0];
+      const size = 32 + Math.round(Math.random() * 24);
+
+      let foundLeft = -1;
+      let foundTop = -1;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const leftVp = Math.random() * Math.max(screenWidth - size, 0);
+        const topVp = Math.random() * Math.max(screenHeight - size, 0);
+        const rect: IconRect = { left: leftVp, top: topVp, right: leftVp + size, bottom: topVp + size };
+
+        const overlapsExclusion = rect.left < exclusion.right && rect.right > exclusion.left &&
+          rect.top < exclusion.bottom && rect.bottom > exclusion.top;
+        if (overlapsExclusion) {
+          continue;
+        }
+
+        let overlapsIcon = false;
+        for (let j = 0; j < placedRects.length; j++) {
+          const other: IconRect = placedRects[j];
+          if (rect.left - gap < other.right && rect.right + gap > other.left &&
+              rect.top - gap < other.bottom && rect.bottom + gap > other.top) {
+            overlapsIcon = true;
+            break;
+          }
+        }
+        if (overlapsIcon) {
+          continue;
+        }
+
+        foundLeft = leftVp;
+        foundTop = topVp;
+        break;
+      }
+
+      // No collision-free spot found within budget — skip this icon rather
+      // than force an overlap; the count is a target range, not a guarantee.
+      if (foundLeft < 0) {
+        continue;
+      }
+
+      placedRects.push({ left: foundLeft, top: foundTop, right: foundLeft + size, bottom: foundTop + size });
+      picked.push({
+        iconFile: cfg.iconFile,
+        leftPercent: (foundLeft / screenWidth) * 100,
+        topPercent: (foundTop / screenHeight) * 100,
+        size: size
+      });
+    }
+    this.decorativeIcons = picked;
+  }
+
+  // Called by @Watch whenever isMember is assigned (cold start already-member,
+  // fresh purchase, restored purchase — every path that unlocks membership).
+  // Fire-and-forget, same as doCloudInit() above; the caller doesn't need to
+  // await this to keep making progress.
+  private onIsMemberChanged(): void {
+    console.log('[Index] isMember changed:', this.isMember);
+    if (!this.isMember) return;
+    this.initCloudSyncIfReady().catch((e: Error) => {
+      console.error('[Index] onIsMemberChanged: initCloudSyncIfReady failed:', e.message);
+    });
+  }
+
+  private doCloudInit(): void {
+    initCloudDB().then((ready: boolean) => {
+      if (!ready) {
+        console.error('[Index] deferred cloud DB init failed, skipping restore/auto-sync this session');
+        return Promise.resolve();
+      }
+      setCloudUserId(this.userOpenId);
+      console.log('[Index] cloud DB initialized (deferred after AGC auth)');
+      return this.cloudRestore().then(() => {
+        this.startAutoSync();
+      });
+    }).catch((e: Error) => {
+      console.error('[Index] deferred cloud init failed:', e.message);
+    });
+  }
+
+  // ── Back navigation ─────────────────────────────────────────────
+  // Checks are ordered by overlay zIndex, highest first, so the system
+  // back-gesture always closes only the topmost overlay. The app only
+  // exits (returns false) when no overlay is open — i.e. at the true
+  // top level (home tab, no modals).
+  onBackPress(): boolean {
+    // zIndex 900 — app lock overlay: stay locked, do not exit
+    if (this.securityLocked) {
+      return true;
+    }
+    // zIndex 999 — delete confirmation dialog can be open on top of EditModal
+    if (this.showDeleteConfirm) {
+      this.showDeleteConfirm = false;
+      return true;
+    }
+    // zIndex 400 — full-screen modals
+    if (this.showAgreement || this.showPrivacy) {
+      this.showAgreement = false;
+      this.showPrivacy = false;
+      return true;
+    }
+    if (this.showAbout) {
+      this.showAbout = false;
+      return true;
+    }
+    if (this.showFeedback) {
+      this.showFeedback = false;
+      return true;
+    }
+    if (this.showSecurity) {
+      this.showSecurity = false;
+      return true;
+    }
+    if (this.showLogin) {
+      this.showLogin = false;
+      return true;
+    }
+    if (this.showBackup) {
+      this.showBackup = false;
+      return true;
+    }
+    if (this.showImport) {
+      this.showImport = false;
+      return true;
+    }
+    if (this.showTheme) {
+      this.showTheme = false;
+      return true;
+    }
+    if (this.showMembership) {
+      this.showMembership = false;
+      return true;
+    }
+    // zIndex 350 — QR export view (may sit on top of EditModal)
+    if (this.showQrToken !== null) {
+      this.showQrToken = null;
+      this.qrUri = '';
+      return true;
+    }
+    // zIndex 300 — Edit account modal
+    if (this.editToken.id) {
+      this.editToken = {} as Token;
+      this.confirmDelete = false;
+      return true;
+    }
+    return false;
+  }
 
   // ── Lifecycle ───────────────────────────────────────────────────
   aboutToAppear(): void {
@@ -103,13 +412,20 @@ struct Index {
       this.timeLeft_ = timeLeft();
       if (this.timeLeft_ === 30) this.refreshOtp();
     }, 1000) as number;
-    // Member auto-restore and sync (delayed to ensure loadData finished)
-    setTimeout(() => {
-      if (this.isMember) {
-        this.cloudRestore();
-        this.startAutoSync();
+    this.queryNavSafeArea();
+  }
+
+  private queryNavSafeArea(): void {
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) return;
+    window.getLastWindow(ctx).then((win) => {
+      const avoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
+      const density = display.getDefaultDisplaySync().densityPixels;
+      const heightVP = avoidArea.bottomRect.height / density;
+      if (heightVP > 0) {
+        this.navSafeBottom = Math.round(heightVP);
       }
-    }, 500);
+    }).catch(() => {});
   }
 
   aboutToDisappear(): void {
@@ -117,23 +433,94 @@ struct Index {
     clearTimeout(this.toastTimer);
     if (this.cdTimer !== -1) clearInterval(this.cdTimer);
     if (this.autoSyncTimer !== -1) clearInterval(this.autoSyncTimer);
+    stopAutoSync();
   }
 
   // ── Data ────────────────────────────────────────────────────────
   private async loadData(): Promise<void> {
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) {
+      this.tokens = INITIAL_TOKENS.slice();
+      return;
+    }
+    const inited = await initPreferences(ctx);
+    if (!inited) {
+      this.tokens = INITIAL_TOKENS.slice();
+      return;
+    }
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
-      await initPreferences(ctx);
+      // Load login state
+      const loginData: LoginData = await loadLogin();
+      if (loginData.loggedIn) {
+        this.loggedIn = true;
+        this.userName = loginData.userName;
+        this.userPhone = loginData.userPhone;
+        this.userAvatar = loginData.userAvatar;
+        this.harmonyLogin = loginData.harmonyLogin;
+        this.userOpenId = loginData.userOpenId || '';
+      }
+
       const saved = await loadTokens();
       this.tokens = (saved && saved.length > 0) ? saved : INITIAL_TOKENS.slice();
       const theme = await loadTheme();
       if (theme) { this.accentColor = theme.color; this.currentTheme = theme; }
+      this.isDark = await loadThemeMode();
+      this.updateStatusBarColor();
+      this.securityMode = await loadSecurityMode();
+      this.lockFallbackEnabled = await loadLockFallbackEnabled();
       const member: MemberData = await loadMember();
+      this.boundAccount = member.boundAccount;
+      // Load sync pref BEFORE assigning isMember so @Watch → startAutoSync sees the gate
+      this.cloudSyncEnabled = await loadCloudSyncEnabled(member.isMember);
       this.isMember = member.isMember;
-      this.memberExpiry = member.expiry || '';
+
       this.refreshOtp();
+      // isMember was just assigned above (or below, on restore) — the @Watch on
+      // isMember triggers initCloudSyncIfReady() automatically, no explicit call needed.
+      if (!this.isMember) {
+        try {
+          const restored = await restoreOwnedPurchases(ctx);
+          if (restored) {
+            // Preserve existing boundAccount — this.userName is '' at cold-start
+            if (!member.isMember) {
+              await saveMember(true, member.boundAccount);
+            }
+            this.boundAccount = member.boundAccount;
+            this.cloudSyncEnabled = await loadCloudSyncEnabled(true);
+            this.isMember = true;
+          }
+        } catch (_) {}
+      }
+
+      // Cold start: lock until biometric / lock-screen auth succeeds
+      if (this.securityMode !== 'off' && this.loggedIn) {
+        this.securityLocked = true;
+        this.randomizeDecorativeIcons();
+        this.runSecurityUnlock();
+      }
     } catch (_) {
       this.tokens = INITIAL_TOKENS.slice();
+    }
+  }
+
+  // Actually invoked via onIsMemberChanged() (the @Watch on isMember above) —
+  // call sites just set this.isMember, they don't need to call this directly.
+  private async initCloudSyncIfReady(): Promise<void> {
+    if (this.agcAuthReady_) {
+      // AGC auth already finished — initialize cloud DB now
+      const ready = await initCloudDB();
+      if (!ready) {
+        console.error('[Index] cloud DB init failed, skipping restore/auto-sync this session');
+        return;
+      }
+      setCloudUserId(this.userOpenId);
+      console.log('[Index] cloud DB initialized');
+      await this.cloudRestore();
+      this.startAutoSync();
+    } else {
+      // AGC auth still in flight — onAgcAuthReady() will handle init once it completes
+      this.pendingCloudInit = true;
+      console.log('[Index] cloud DB init deferred (waiting for AGC auth)');
     }
   }
 
@@ -153,18 +540,32 @@ struct Index {
   }
 
   private addToken(brand: string, account: string, secret: string): void {
+    // Duplicate check
+    const normalizedSecret = secret.trim().toUpperCase();
+    const existing = this.tokens.find(t =>
+      t.secret.toUpperCase() === normalizedSecret
+    );
+    if (existing) {
+      this.toast(`已存在相同密钥的账号：${existing.brand}`);
+      return;
+    }
+
+    // Free user limit check
     if (!this.isMember && this.tokens.length >= FREE_TOKEN_LIMIT) {
       this.toast(`免费用户最多添加${FREE_TOKEN_LIMIT}个口令`);
       this.currentTab = 2;
       return;
     }
-    const tok: Token = { id: Date.now().toString(), brand: brand, account: account, secret: secret.toUpperCase() };
+    const tok: Token = { id: Date.now().toString(), brand: brand, account: account, secret: normalizedSecret };
     this.tokens = this.tokens.concat([tok]);
     saveTokens(this.tokens);
     this.refreshOtp();
     this.currentTab = 0;
     this.toast(`已添加 ${brand}`);
-    if (this.isMember) this.cloudBackup();
+    if (this.isMember && this.cloudSyncEnabled) {
+      // Fire-and-forget async backup (gated by cloud-sync toggle)
+      this.cloudBackup();
+    }
   }
 
   private saveEdit(): void {
@@ -178,13 +579,26 @@ struct Index {
     });
     saveTokens(this.tokens);
     this.refreshOtp();
+    if (this.isMember && this.cloudSyncEnabled && this.loggedIn) {
+      const updated = this.tokens.find((t: Token): boolean => t.id === id);
+      if (updated) {
+        updateToken(updated).catch((e: Error) => console.error('[Index] cloudUpdate failed:', e.message));
+      }
+    }
     this.editToken = {} as Token;
     this.toast('已保存');
+  }
+
+  private isValidToken(t: object): boolean {
+    const tok = t as Record<string, string>;
+    return typeof tok['id'] === 'string' && tok['id'].length > 0 &&
+      typeof tok['secret'] === 'string' && tok['secret'].length > 0;
   }
 
   private deleteToken(localOnly: boolean): void {
     if (!this.deleteTarget.id && !this.editToken.id) return;
     const id = this.deleteTarget.id || this.editToken.id;
+    const tokenToDelete = this.tokens.find((t: Token): boolean => t.id === id);
     this.tokens = this.tokens.filter((t: Token) => t.id !== id);
     saveTokens(this.tokens);
     this.refreshOtp();
@@ -192,7 +606,9 @@ struct Index {
     this.showDeleteConfirm = false;
     this.deleteTarget = {} as Token;
     this.toast('已删除');
-    if (this.isMember && !localOnly) this.cloudDelete(id);
+    if (this.isMember && this.loggedIn && !localOnly && tokenToDelete) {
+      this.cloudDelete(tokenToDelete);
+    }
   }
 
   private requestDeleteToken(tok: Token): void {
@@ -213,6 +629,45 @@ struct Index {
     } catch (_) { this.toast('复制失败'); }
   }
 
+  private async doHarmonyLogin(): Promise<void> {
+    if (!this.privacyAgreed) { this.toast('请先同意隐私保护协议'); return; }
+    const ctx = this.getUIContext().getHostContext();
+    if (!ctx) { this.toast('系统错误，请重试'); return; }
+    try {
+      const request = new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
+      request.scopes = ['openid', 'profile'];
+      request.forceAuthorization = true;
+      request.state = util.generateRandomUUID();
+      const controller = new authentication.AuthenticationController(ctx);
+      const resp = await controller.executeRequest(request);
+      const cred = (resp as authentication.AuthorizationWithHuaweiIDResponse).data;
+      const unionId = cred?.unionID || '';
+      console.info(`[ArcaneKey] HuaweiID auth success: unionID=${unionId ? 'set' : 'empty'}, nickName=${cred?.nickName || 'empty'}, avatarUri=${cred?.avatarUri ? 'set' : 'empty'}`);
+      this.loggedIn = true;
+      this.userOpenId = unionId;
+      setCloudUserId(unionId);
+      this.userName = cred?.nickName || '华为用户';
+      this.userAvatar = cred?.avatarUri || '';
+      this.harmonyLogin = true;
+      this.showLogin = false;
+      this.privacyAgreed = false;
+      await saveLogin(true, this.userName, this.userPhone, this.userAvatar, true, unionId);
+      this.toast('登录成功');
+      if (this.isMember) {
+        await this.cloudRestore();
+        this.startAutoSync();
+      }
+    } catch (e) {
+      const code = (e as IapError).code;
+      if (code === authentication.AuthenticationErrorCode.USER_CANCELED) {
+        this.toast('已取消登录');
+      } else {
+        console.warn(`[ArcaneKey] HuaweiID auth error: code=${code}`);
+        this.toast(`登录失败(${code})，请重试`);
+      }
+    }
+  }
+
   private doLogin(): void {
     const wasLoggedIn = this.loggedIn;
     this.loggedIn = true;
@@ -226,7 +681,8 @@ struct Index {
 
   private doBackup(): void {
     if (!this.backupPw || this.backupPw !== this.backupPw2) return;
-    const ctx = getContext(this) as common.UIAbilityContext;
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('上下文错误，请重启应用'); return; }
     const fileName = `auth_backup_${Date.now()}.atbk`;
     const tmpPath = `${ctx.filesDir}/${fileName}`;
     try {
@@ -263,23 +719,149 @@ struct Index {
     } catch (_) { this.toast('备份失败'); }
   }
 
+  private resetImportState(): void {
+    this.importText = '';
+    this.importPw = '';
+    this.importFileUri = '';
+    this.importFileName = '';
+  }
+
+  private importFromUris(uris: string[]): void {
+    const existingSecrets = new Set(this.tokens.map((t: Token) => t.secret.toUpperCase()));
+    const toAdd: Token[] = [];
+    let ts = Date.now();
+    for (const uri of uris) {
+      if (!uri.startsWith('otpauth://totp/')) continue;
+      try {
+        const qIdx = uri.indexOf('?');
+        const q = qIdx >= 0 ? uri.substring(qIdx + 1) : '';
+        const params: Record<string, string> = {};
+        if (q) {
+          q.split('&').forEach((p: string) => {
+            const eqIdx = p.indexOf('=');
+            if (eqIdx > 0) {
+              params[p.substring(0, eqIdx)] = decodeURIComponent(p.substring(eqIdx + 1));
+            }
+          });
+        }
+        const labelEnd = qIdx >= 0 ? qIdx : uri.length;
+        const labelRaw = uri.substring('otpauth://totp/'.length, labelEnd);
+        const label = decodeURIComponent(labelRaw);
+        const colonIdx = label.indexOf(':');
+        const b = params['issuer'] || (colonIdx >= 0 ? label.substring(0, colonIdx) : label);
+        const a = colonIdx >= 0 ? label.substring(colonIdx + 1) : (params['issuer'] ? label : '');
+        const s = (params['secret'] ?? '').toUpperCase();
+        if (!s || existingSecrets.has(s)) continue;
+        const tok: Token = { id: (ts++).toString(), brand: b.trim() || '未知', account: a.trim(), secret: s };
+        toAdd.push(tok);
+        existingSecrets.add(s);
+      } catch (_) {}
+    }
+    if (toAdd.length === 0) { this.toast('未找到有效的账号数据'); return; }
+    const room = !this.isMember ? Math.max(0, FREE_TOKEN_LIMIT - this.tokens.length) : toAdd.length;
+    const actualToAdd = toAdd.slice(0, room);
+    const skipped = toAdd.length - actualToAdd.length;
+    if (actualToAdd.length === 0) { this.toast(`已达到免费上限 ${FREE_TOKEN_LIMIT} 个，请开通会员`); return; }
+    this.tokens = this.tokens.concat(actualToAdd);
+    saveTokens(this.tokens);
+    this.refreshOtp();
+    this.resetImportState();
+    this.showImport = false;
+    if (skipped > 0) {
+      this.toast(`成功导入 ${actualToAdd.length} 个，${skipped} 个超出免费上限`);
+    } else {
+      this.toast(`成功导入 ${actualToAdd.length} 个账号`);
+    }
+    if (this.isMember && this.cloudSyncEnabled && this.loggedIn) { this.cloudBackup(); }
+  }
+
   private doImport(): void {
-    if (!this.importText || !this.importPw) return;
+    if (!this.importText) return;
+    const text = this.importText.trim();
+
+    // Try JSON with uri fields (e.g. Proton Authenticator export, Google Authenticator export)
+    if (text.startsWith('{') || text.startsWith('[')) {
+      try {
+        const parsed: object = JSON.parse(text) as object;
+        const uris: string[] = [];
+
+        // Determine the array of items to process
+        let items: object[] = [];
+        if (Array.isArray(parsed)) {
+          items = parsed as object[];
+        } else {
+          // Root is a wrapper object — check common array fields
+          const root = parsed as Record<string, object>;
+          if (Array.isArray(root['entries'])) {
+            items = root['entries'] as object[];
+          } else if (Array.isArray(root['data'])) {
+            items = root['data'] as object[];
+          } else if (Array.isArray(root['accounts'])) {
+            items = root['accounts'] as object[];
+          } else if (Array.isArray(root['tokens'])) {
+            items = root['tokens'] as object[];
+          } else {
+            items = [parsed];
+          }
+        }
+
+        for (const item of items) {
+          // Direct uri field (Google Authenticator, Aegis, etc.)
+          const directUri = (item as Record<string, string>)['uri'];
+          if (typeof directUri === 'string' && directUri.startsWith('otpauth://')) {
+            uris.push(directUri);
+            continue;
+          }
+          // Nested uri in 'content' (Proton Authenticator format)
+          const content = (item as Record<string, object>)['content'];
+          if (content && typeof content === 'object') {
+            const nestedUri = (content as Record<string, string>)['uri'];
+            if (typeof nestedUri === 'string' && nestedUri.startsWith('otpauth://')) {
+              uris.push(nestedUri);
+            }
+          }
+        }
+
+        if (uris.length > 0) { this.importFromUris(uris); return; }
+      } catch (_) {}
+    }
+
+    // Try plaintext otpauth:// URI lines
+    const lines = text.split('\n')
+      .map((l: string) => l.trim())
+      .filter((l: string) => l.startsWith('otpauth://totp/'));
+    if (lines.length > 0) { this.importFromUris(lines); return; }
+
+    // Encrypted backup — requires password
+    if (!this.importPw) { this.toast('请输入解密密码，或粘贴 otpauth:// 格式的内容'); return; }
     try {
       const data = decryptData(this.importText, this.importPw) as Token[];
       if (!Array.isArray(data)) throw new Error('invalid');
-      const ids = new Set(this.tokens.map((t: Token) => t.id));
-      const imported = data.filter((t: Token) => !ids.has(t.id));
+      // Dedup by secret (same key addToken()/importFromUris() use), not id —
+      // a backup's token ids were generated on the device that created the
+      // backup and won't match ids of accounts already added locally via
+      // other paths, so id-based dedup let the same secret in twice.
+      const existingSecrets = new Set(this.tokens.map((t: Token) => t.secret.toUpperCase()));
+      const imported: Token[] = [];
+      for (const t of data) {
+        if (!this.isValidToken(t as object)) continue;
+        const s = t.secret.toUpperCase();
+        if (existingSecrets.has(s)) continue;
+        imported.push(t);
+        existingSecrets.add(s);
+      }
       this.tokens = this.tokens.concat(imported);
       saveTokens(this.tokens);
       this.refreshOtp();
+      this.resetImportState();
       this.showImport = false;
       this.toast(`成功导入 ${imported.length} 个账号`);
     } catch (_) { this.toast('解密失败，请检查密码'); }
   }
 
   private selectImportFile(): void {
-    const ctx = getContext(this) as common.UIAbilityContext;
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('上下文错误，请重启应用'); return; }
     const docPicker = new picker.DocumentViewPicker(ctx);
     docPicker.select({ maxSelectNumber: 1 }).then((result: string[]) => {
       if (result && result.length > 0) {
@@ -289,9 +871,11 @@ struct Index {
         this.importFileName = fileName;
         const file: fs.File = fs.openSync(uri, fs.OpenMode.READ_ONLY);
         const stat: fs.Stat = fs.statSync(uri);
+        if (stat.size > 1024 * 1024) { fs.closeSync(file.fd); this.toast('文件过大，请选择小于1MB的备份文件'); return; }
         const buf: ArrayBuffer = new ArrayBuffer(stat.size);
         fs.readSync(file.fd, buf);
-        this.importText = String.fromCodePoint(...new Uint8Array(buf));
+        const decoder = new util.TextDecoder('utf-8');
+        this.importText = decoder.decodeToString(new Uint8Array(buf));
         fs.closeSync(file.fd);
       }
     }).catch(() => { this.toast('选择文件取消'); });
@@ -306,66 +890,148 @@ struct Index {
   }
 
   // ── Cloud Backup & Sync (Cloud Kit) ─────────────────────────────
-  private cloudBackup(): void {
+  private async cloudBackup(): Promise<void> {
     if (!this.isMember) return;
+
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = JSON.stringify(this.tokens);
-      prefs.putSync('tokens_backup', data);
-      prefs.flushSync();
-    } catch (_) {}
+      console.log('[Index] cloudBackup started, tokens:', this.tokens.length);
+
+      // upsert 全部本地口令到云端（主键 secret 匹配则更新，否则新增）
+      for (const token of this.tokens) {
+        await addToken(token);
+      }
+
+      console.log('[Index] cloudBackup completed');
+    } catch (e) {
+      console.error('[Index] cloudBackup failed:', (e as Error).message);
+      this.toast('云端备份失败，请检查网络');
+    }
   }
 
-  private cloudRestore(): void {
+  private async cloudRestore(): Promise<void> {
     if (!this.isMember) return;
+
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = prefs.getSync('tokens_backup', '') as string;
-      if (data) {
-        const cloudTokens = JSON.parse(data) as Token[];
-        const ids = new Set(this.tokens.map((t: Token) => t.id));
-        const newTokens = cloudTokens.filter((t: Token) => !ids.has(t.id));
-        if (newTokens.length > 0) {
-          this.tokens = this.tokens.concat(newTokens);
-          saveTokens(this.tokens);
-          this.refreshOtp();
-          this.toast(`从云端同步 ${newTokens.length} 个账号`);
-        }
+      console.log('[Index] cloudRestore started');
+
+      // 执行双向同步
+      const merged = await sync(this.tokens, this.isMember);
+
+      // 检查是否有新数据
+      if (merged.length > this.tokens.length) {
+        const oldLen = this.tokens.length;
+        this.tokens = merged;
+        await saveTokens(this.tokens);
+        this.refreshOtp();
+
+        const newCount = merged.length - oldLen;
+        this.toast(`从云端同步 ${newCount} 个账号`);
+        console.log('[Index] cloudRestore completed, new tokens:', newCount);
+      } else {
+        console.log('[Index] cloudRestore completed, no new tokens');
       }
-    } catch (_) {}
+    } catch (e) {
+      console.error('[Index] cloudRestore failed:', (e as Error).message);
+      // 同步失败不提示，不影响用户使用
+    }
   }
 
-  private cloudDelete(tokenId: string): void {
+  private async cloudDelete(token: SyncToken): Promise<void> {
     if (!this.isMember) return;
+
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
-      const prefs = preferences.getPreferencesSync(ctx, { name: 'arcankey_cloud' });
-      const data = prefs.getSync('tokens_backup', '') as string;
-      if (data) {
-        const tokens = (JSON.parse(data) as Token[]).filter((t: Token) => t.id !== tokenId);
-        prefs.putSync('tokens_backup', JSON.stringify(tokens));
-        prefs.flushSync();
-      }
-    } catch (_) {}
+      console.log('[Index] cloudDelete started, token:', token.id);
+      await softDeleteToken(token);
+      console.log('[Index] cloudDelete completed');
+    } catch (e) {
+      console.error('[Index] cloudDelete failed:', (e as Error).message);
+    }
   }
 
   private startAutoSync(): void {
-    if (!this.isMember) return;
-    this.autoSyncTimer = setInterval(() => {
-      this.cloudBackup();
-    }, 60 * 60 * 1000) as number;
+    if (!this.isMember || !this.cloudSyncEnabled) return;
+
+    startAutoSync(async () => {
+      await this.cloudBackup();
+    });
   }
 
-  private buyMembership(): void {
-    // TODO: 生产环境接入微信支付/华为支付
-    const expiry = new Date();
-    expiry.setFullYear(expiry.getFullYear() + 1);
-    this.isMember = true;
-    this.memberExpiry = expiry.toISOString();
-    saveMember(true, expiry.toISOString());
-    this.toast('开通成功（演示）');
+  private async onCloudSyncToggle(on: boolean): Promise<void> {
+    if (!this.isMember) return;
+    this.cloudSyncEnabled = on;
+    await saveCloudSyncEnabled(on);
+    if (on) {
+      this.startAutoSync();
+    } else {
+      stopAutoSync();
+    }
+  }
+
+  private async buyMembership(): Promise<void> {
+    console.info('[Index] buyMembership called, isMember:', this.isMember, 'loggedIn:', this.loggedIn);
+    if (!this.loggedIn) {
+      this.showLogin = true;
+      return;
+    }
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('系统错误，请重试'); return; }
+    try {
+      await checkSandboxStatus(ctx);
+      const tokenResult = await launchPurchase(ctx);
+      await saveMember(true, this.userName, this.userOpenId);
+      this.cloudSyncEnabled = true;
+      await saveCloudSyncEnabled(true);
+      this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
+      this.boundAccount = this.userName;
+      this.toast('开通成功');
+      this.showMembership = false;
+      // Acknowledge purchase to prevent auto-refund after 24h
+      try { await acknowledgePurchase(ctx, tokenResult.purchaseToken, tokenResult.purchaseOrderId); } catch (_) {}
+    } catch (e) {
+      const code = (e as IapError).code;
+      if (code === iap.IAPErrorCode.USER_CANCELED) {
+        this.toast('已取消');
+      } else if (code === iap.IAPErrorCode.ACCOUNT_NOT_LOGGED_IN) {
+        this.toast('请先在系统设置中登录华为账号');
+      } else if (code === iap.IAPErrorCode.NETWORK_ERROR) {
+        this.toast('网络异常，请检查网络后重试');
+      } else if (code === iap.IAPErrorCode.PRODUCT_OWNED) {
+        // The just-failed createPurchase()'s cashier UIExtension session is still
+        // tearing down at this point; calling queryPurchases() immediately hangs
+        // with no resolve/reject (observed on real device). Give it a moment.
+        console.info('[Index] buyMembership: PRODUCT_OWNED, waiting before restorePurchase');
+        await new Promise<void>((resolve) => setTimeout(resolve, 800));
+        console.info('[Index] buyMembership: calling restorePurchase');
+        await this.restorePurchase();
+      } else {
+        console.warn('[Index] buyMembership: unhandled error code', code);
+        this.toast(`开通失败（${code ?? '未知'}），请重试`);
+      }
+    }
+  }
+
+  private async restorePurchase(): Promise<void> {
+    console.info('[Index] restorePurchase called');
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('系统错误，请重试'); return; }
+    try {
+      const result = await restoreOwnedPurchases(ctx);
+      console.info('[Index] restorePurchase: restoreOwnedPurchases returned', result ? 'a token' : 'null');
+      if (result) {
+        const bound = this.userName || this.boundAccount;
+        await saveMember(true, bound, this.userOpenId);
+        this.cloudSyncEnabled = true;
+        await saveCloudSyncEnabled(true);
+        this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
+        this.boundAccount = bound;
+        this.toast('会员已恢复');
+      } else {
+        this.toast('未找到有效购买记录');
+      }
+    } catch (e) {
+      console.error('[Index] restorePurchase failed:', (e as Error).message);
+      this.toast('恢复失败，请检查网络后重试');
+    }
   }
 
   // ── Builder: Tab Bar Icon ───────────────────────────────────────
@@ -373,16 +1039,16 @@ struct Index {
   tabIcon(type: string, tabIndex: number) {
     if (type === 'home') {
       SymbolGlyph($r('sys.symbol.house'))
-        .fontColor([this.currentTab === 0 ? this.accentColor : '#d0d0dd'])
-        .fontSize(24)
+        .fontColor([this.currentTab === 0 ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
+        .fontSize(18)
     } else if (type === 'scan') {
       SymbolGlyph($r('sys.symbol.qrcode'))
-        .fontColor([this.currentTab === 1 ? this.accentColor : '#d0d0dd'])
-        .fontSize(24)
+        .fontColor([this.currentTab === 1 ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
+        .fontSize(18)
     } else if (type === 'profile') {
       SymbolGlyph($r('sys.symbol.person'))
-        .fontColor([this.currentTab === 2 ? this.accentColor : '#d0d0dd'])
-        .fontSize(24)
+        .fontColor([this.currentTab === 2 ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
+        .fontSize(18)
     }
   }
 
@@ -391,12 +1057,12 @@ struct Index {
   bottomNav() {
     Row() {
       // 首页
-      Column({ space: 3 }) {
+      Column({ space: 2 }) {
         this.tabIcon('home', 0)
         Text('首页')
-          .fontSize(11)
+          .fontSize(9)
           .fontWeight(this.currentTab === 0 ? 600 : 500)
-          .fontColor(this.currentTab === 0 ? this.accentColor : '#d0d0dd')
+          .fontColor(this.currentTab === 0 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
       }
       .layoutWeight(1)
       .width('100%')
@@ -410,14 +1076,14 @@ struct Index {
       })
 
       // 搜索 (紧跟首页)
-      Column({ space: 3 }) {
+      Column({ space: 2 }) {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
-          .fontColor([this.searching ? this.accentColor : '#d0d0dd'])
-          .fontSize(24)
+          .fontColor([this.searching ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
+          .fontSize(18)
         Text('搜索')
-          .fontSize(10)
+          .fontSize(9)
           .fontWeight(this.searching ? 600 : 500)
-          .fontColor(this.searching ? this.accentColor : '#d0d0dd')
+          .fontColor(this.searching ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
       }
       .layoutWeight(1)
       .width('100%')
@@ -432,12 +1098,12 @@ struct Index {
       })
 
       // 扫码
-      Column({ space: 3 }) {
+      Column({ space: 2 }) {
         this.tabIcon('scan', 1)
         Text('扫码')
-          .fontSize(10)
+          .fontSize(9)
           .fontWeight(this.currentTab === 1 ? 600 : 500)
-          .fontColor(this.currentTab === 1 ? this.accentColor : '#d0d0dd')
+          .fontColor(this.currentTab === 1 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
       }
       .layoutWeight(1)
       .width('100%')
@@ -453,12 +1119,12 @@ struct Index {
       })
 
       // 我的
-      Column({ space: 3 }) {
+      Column({ space: 2 }) {
         this.tabIcon('profile', 2)
         Text('我的')
-          .fontSize(11)
+          .fontSize(9)
           .fontWeight(this.currentTab === 2 ? 600 : 500)
-          .fontColor(this.currentTab === 2 ? this.accentColor : '#d0d0dd')
+          .fontColor(this.currentTab === 2 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
       }
       .layoutWeight(1)
       .width('100%')
@@ -467,17 +1133,20 @@ struct Index {
       .justifyContent(FlexAlign.Center)
       .onClick(() => { this.currentTab = 2; this.navVisible = true; })
     }
-    .width('90%')
-    .height(62)
-    .position({ x: '5%', y: '100%' })
-    .translate({ x: 0, y: this.navVisible ? -82 : 0 })
-    .animation({ duration: 300, curve: Curve.EaseInOut })
-    // 胶囊背景
-    .backgroundColor('rgba(30,30,42,0.92)')
-    .borderRadius(31)
-    .border({ width: 0.5, color: 'rgba(255,255,255,0.12)' })
-    .shadow({ radius: 20, color: 'rgba(0,0,0,0.4)', offsetX: 0, offsetY: 8 })
+    .width(222)
+    .height(46)
+    .position({ x: '50%', y: '100%' })
+    .translate({ x: '-50%', y: this.navVisible ? -(46 + this.navSafeBottom + 24) : 56 })
+    .opacity(this.navVisible ? 1 : 0)
+    .scale({ x: this.navVisible ? 1 : 0.78, y: this.navVisible ? 1 : 0.78 })
+    .animation({ duration: 220, curve: Curve.Friction })
+    .backgroundColor(this.c('rgba(30,30,40,0.62)', 'rgba(255,255,255,0.90)'))
+    .backdropBlur(18)
+    .borderRadius(23)
+    .border({ width: this.isDark ? 0 : 1, color: 'rgba(0,0,0,0.06)' })
+    .shadow({ radius: 12, color: this.c('rgba(0,0,0,0.35)', 'rgba(0,0,0,0.10)'), offsetX: 0, offsetY: 4 })
     .justifyContent(FlexAlign.SpaceAround)
+    .padding({ bottom: 5 })
   }
 
   // ── Builder: Toast ──────────────────────────────────────────────
@@ -502,11 +1171,11 @@ struct Index {
   modalHeader(title: string, onClose: () => void) {
     Row({ space: 12 }) {
       Button({ type: ButtonType.Normal }) {
-        Text('×').fontSize(20).fontColor('rgba(238,238,245,0.75)')
+        Text('×').fontSize(20).fontColor(this.c('rgba(238,238,245,0.75)', '#5C4F43'))
       }
-      .backgroundColor('rgba(255,255,255,0.08)').borderRadius(11).width(36).height(36)
+      .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.06)')).borderRadius(11).width(36).height(36)
       .onClick(onClose)
-      Text(title).fontSize(17).fontWeight(650).fontColor('#eeeef5')
+      Text(title).fontSize(17).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
     }
     .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 0 })
   }
@@ -519,11 +1188,11 @@ struct Index {
         // Header
         Row() {
           Button({ type: ButtonType.Normal }) {
-            Text('×').fontSize(20).fontColor('rgba(238,238,245,0.75)')
+            Text('×').fontSize(20).fontColor(this.c('rgba(238,238,245,0.75)', '#5C4F43'))
           }
-          .backgroundColor('rgba(255,255,255,0.08)').borderRadius(11).width(36).height(36)
+          .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.06)')).borderRadius(11).width(36).height(36)
           .onClick(() => { this.editToken = {} as Token; })
-          Text('编辑账号').fontSize(17).fontWeight(650).fontColor('#eeeef5')
+          Text('编辑账号').fontSize(17).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
           Text('').width(36).height(36)
         }
         .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 8 })
@@ -534,73 +1203,105 @@ struct Index {
         Scroll() {
           Column({ space: 14 }) {
             Row() {
-              Logo({ brand: this.editBrand || (this.editToken?.brand ?? ''), logoSize: 64 })
+              Logo({ brand: this.editBrand || (this.editToken?.brand ?? ''), account: this.editAccount || (this.editToken?.account ?? ''), logoSize: 64, isDark: this.isDark, accentColor: this.accentColor })
             }
             .width('100%').padding({ top: 8, bottom: 8 }).justifyContent(FlexAlign.Center)
 
             Column({ space: 6 }) {
-              Text('品牌名称').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              Text('品牌名称').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               TextInput({ text: this.editBrand, placeholder: '' })
                 .onChange((v) => { this.editBrand = v; })
-                .backgroundColor('#191920').fontColor('#eeeef5')
-                .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+                .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+                .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
                 .height(44).padding({ left: 14, right: 14 })
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
-              Text('账号信息').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              Text('账号信息').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               TextInput({ text: this.editAccount, placeholder: '' })
                 .onChange((v) => { this.editAccount = v; })
-                .backgroundColor('#191920').fontColor('#eeeef5')
-                .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+                .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+                .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
                 .height(44).padding({ left: 14, right: 14 })
             }.alignItems(HorizontalAlign.Start).width('100%')
 
             Column({ space: 6 }) {
-              Row() {
-                Text('Secret Key（只读）').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              Row({ space: 6 }) {
+                Text('Secret Key').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).flexGrow(1)
                 if (this.isMember) {
-                  Text(this.editSecretVisible ? '隐藏' : '查看')
-                    .fontSize(11).fontColor(this.accentColor).margin({ left: 8 })
-                    .onClick(() => { this.editSecretVisible = !this.editSecretVisible; })
+                  Button({ type: ButtonType.Normal }) {
+                    SymbolGlyph(this.editSecretVisible ? $r('sys.symbol.eye_slash') : $r('sys.symbol.eye'))
+                      .fontSize(15).fontColor([this.accentColor])
+                  }
+                  .width(30).height(30).borderRadius(10)
+                  .backgroundColor(this.c('rgba(255,255,255,0.06)', 'rgba(0,0,0,0.04)'))
+                  .onClick(() => { this.editSecretVisible = !this.editSecretVisible; })
+                  Button({ type: ButtonType.Normal }) {
+                    SymbolGlyph($r('sys.symbol.qrcode'))
+                      .fontSize(15).fontColor([this.accentColor])
+                  }
+                  .width(30).height(30).borderRadius(10)
+                  .backgroundColor(this.c('rgba(255,255,255,0.06)', 'rgba(0,0,0,0.04)'))
+                  .onClick(() => {
+                    const t = this.editToken;
+                    this.qrUri = 'otpauth://totp/' + encodeURIComponent(t.brand) + ':' +
+                      encodeURIComponent(t.account) + '?secret=' + t.secret +
+                      '&issuer=' + encodeURIComponent(t.brand);
+                    this.showQrToken = t;
+                    this.confirmDelete = false;
+                    // NOTE: editToken is intentionally left untouched so EditModal
+                    // stays mounted underneath QrModal (zIndex 300 vs 350) and
+                    // reappears when QrModal is closed.
+                  })
                 }
-              }
+              }.alignItems(VerticalAlign.Center)
               Text(this.isMember && this.editSecretVisible ? (this.editToken?.secret ?? '') : '*'.repeat(Math.min(this.editToken?.secret.length ?? 0, 20)))
                 .fontSize(13)
-                .fontColor(this.isMember && this.editSecretVisible ? '#eeeef5' : 'rgba(238,238,245,0.4)')
+                .fontColor(this.isMember && this.editSecretVisible ? this.c('#eeeef5', '#2C1810') : this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                 .fontFamily('monospace').letterSpacing(1)
                 .width('100%').height(44)
                 .padding({ left: 14, right: 14 })
                 .textAlign(TextAlign.Start)
-                .backgroundColor('#191920')
-                .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+                .backgroundColor(this.c('#191920', '#FFFFFF'))
+                .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
+                .onClick(() => {
+                  if (this.isMember && this.editSecretVisible && this.editToken?.secret) {
+                    const d = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.editToken.secret);
+                    pasteboard.getSystemPasteboard().setData(d);
+                    this.toast('密钥已复制');
+                  }
+                })
               if (!this.isMember) {
                 Text('🔒 开通会员可查看密钥')
-                  .fontSize(11).fontColor('rgba(238,238,245,0.25)').margin({ top: 4 })
+                  .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).margin({ top: 4 })
               }
             }
             .alignItems(HorizontalAlign.Start).width('100%')
 
             // Bottom bar
-            Row({ space: 10 }) {
+            Column({ space: 0 }) {
               if (!this.confirmDelete) {
-                Button('删除账号')
-                  .flexGrow(1).backgroundColor('rgba(248,113,113,0.08)')
-                  .border({ width: 1, color: 'rgba(248,113,113,0.25)' })
-                  .borderRadius(14).fontColor('#f87171').fontSize(14).fontWeight(600)
-                  .onClick(() => { this.requestDeleteToken(this.editToken); })
-                Button('保存')
-                  .flexGrow(1).backgroundColor(this.accentColor)
-                  .borderRadius(14).fontColor('#fff').fontSize(14).fontWeight(650)
-                  .onClick(() => this.saveEdit())
+                Row({ space: 10 }) {
+                  Button('删除账号')
+                    .flexGrow(1).backgroundColor('rgba(248,113,113,0.08)')
+                    .border({ width: 1, color: 'rgba(248,113,113,0.25)' })
+                    .borderRadius(14).fontColor('#f87171').fontSize(14).fontWeight(600)
+                    .onClick(() => { this.requestDeleteToken(this.editToken); })
+                  Button('保存')
+                    .flexGrow(1).backgroundColor(this.accentColor)
+                    .borderRadius(14).fontColor('#fff').fontSize(14).fontWeight(650)
+                    .onClick(() => this.saveEdit())
+                }.width('100%')
               } else {
-                Button('取消').flexGrow(1).backgroundColor(Color.Transparent)
-                  .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(14)
-                  .fontColor('rgba(238,238,245,0.6)').fontSize(14)
-                  .onClick(() => { this.confirmDelete = false; })
-                Button('确认删除').flexGrow(1).backgroundColor('#ef4444').borderRadius(14)
-                  .fontColor('#fff').fontSize(14).fontWeight(650)
-                  .onClick(() => this.deleteToken(true))
+                Row({ space: 10 }) {
+                  Button('取消').flexGrow(1).backgroundColor(Color.Transparent)
+                    .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(14)
+                    .fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).fontSize(14)
+                    .onClick(() => { this.confirmDelete = false; })
+                  Button('确认删除').flexGrow(1).backgroundColor('#ef4444').borderRadius(14)
+                    .fontColor('#fff').fontSize(14).fontWeight(650)
+                    .onClick(() => this.deleteToken(true))
+                }.width('100%')
               }
             }
             .width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
@@ -608,10 +1309,49 @@ struct Index {
           .padding({ left: 20, right: 20 })
         }.scrollBar(BarState.Off)
       }
-      .width('100%').height('100%').backgroundColor('#0d0d12')
+      .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
       .padding({ top: 44 })
     }
     .width('100%').height('100%').zIndex(300)
+  }
+
+  // ── Builder: QR Export Modal ────────────────────────────────────
+  @Builder
+  qrModal() {
+    Stack() {
+      Column() {
+        Row() {
+          Button({ type: ButtonType.Normal }) {
+            Text('×').fontSize(20).fontColor('rgba(238,238,245,0.75)')
+          }
+          .backgroundColor('rgba(255,255,255,0.08)').borderRadius(11).width(36).height(36)
+          .onClick(() => { this.showQrToken = null; this.qrUri = ''; })
+          Text('导出账号').fontSize(17).fontWeight(650).fontColor('#eeeef5')
+          Text('').width(36).height(36)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 8 })
+        .justifyContent(FlexAlign.SpaceBetween)
+
+        Scroll() {
+          Column({ space: 24 }) {
+            Logo({ brand: this.showQrToken?.brand ?? '', account: this.showQrToken?.account ?? '', logoSize: 56, isDark: this.isDark, accentColor: this.accentColor })
+            Column({ space: 12 }) {
+              QRCode(this.qrUri)
+                .width(240).height(240)
+                .color('#eeeef5').backgroundColor('#191920')
+                .borderRadius(12)
+              Text('用其他验证器扫描此码可直接导入').fontSize(12)
+                .fontColor('rgba(238,238,245,0.65)').textAlign(TextAlign.Center)
+            }.alignItems(HorizontalAlign.Center).width('100%')
+          }
+          .alignItems(HorizontalAlign.Center)
+          .padding({ left: 20, right: 20, top: 12, bottom: 32 })
+        }.scrollBar(BarState.Off).layoutWeight(1)
+      }
+      .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
+      .padding({ top: 44 })
+    }
+    .width('100%').height('100%').zIndex(350)
   }
 
   // ── Builder: Login Modal ────────────────────────────────────────
@@ -631,8 +1371,8 @@ struct Index {
         }
         .width(72).height(72)
 
-        Text('使用鸿蒙账号快速登录')
-          .fontSize(14).fontColor('rgba(238,238,245,0.55)').textAlign(TextAlign.Center)
+        Text('使用华为账号快速登录')
+          .fontSize(14).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43')).textAlign(TextAlign.Center)
 
         // Privacy agreement
         Row({ space: 8 }) {
@@ -643,49 +1383,49 @@ struct Index {
           }
           .width(18).height(18).borderRadius(4)
           .backgroundColor(this.privacyAgreed ? this.accentColor : Color.Transparent)
-          .border({ width: 1.5, color: this.privacyAgreed ? this.accentColor : 'rgba(238,238,245,0.3)' })
+          .border({ width: 1.5, color: this.privacyAgreed ? this.accentColor : this.c('rgba(238,238,245,0.60)', '#9C9088') })
           .onClick(() => { this.privacyAgreed = !this.privacyAgreed; })
 
           Text() {
             Span('我已阅读并同意 ')
-              .fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
             Span('《隐私保护协议》')
               .fontSize(12).fontColor(this.accentColor).fontWeight(500)
+              .onClick(() => {
+                const ctx = AppStorage.get<common.UIAbilityContext>('context');
+                if (!ctx) return;
+                const want: Want = {
+                  action: 'ohos.want.action.viewData',
+                  uri: 'https://mengyuefeitian.github.io/ArcaneKey/privacy.html',
+                  entities: ['entity.system.browsable'],
+                };
+                ctx.startAbility(want).catch((_: Error) => {
+                  this.toast('无法打开链接');
+                });
+              })
             Span('，授权获取头像、昵称信息')
-              .fontSize(12).fontColor('rgba(238,238,245,0.45)')
+              .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           }
           .flexGrow(1)
         }
         .width('100%')
         .padding({ left: 4, right: 4 })
 
-        Button('鸿蒙账号登录')
+        Button('华为账号登录')
           .width('100%').height(50).borderRadius(15)
-          .backgroundColor(this.privacyAgreed ? this.accentColor : '#191920')
-          .fontColor(this.privacyAgreed ? '#fff' : 'rgba(238,238,245,0.3)')
+          .backgroundColor(this.privacyAgreed ? this.accentColor : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.privacyAgreed ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650)
-          .onClick(() => {
-            if (!this.privacyAgreed) {
-              this.toast('请先同意隐私保护协议');
-              return;
-            }
-            this.loggedIn = true;
-            this.userName = '鸿蒙用户';
-            this.userPhone = '';
-            this.harmonyLogin = true;
-            this.showLogin = false;
-            this.privacyAgreed = false;
-            this.toast('鸿蒙账号登录成功');
-          })
-        Text('将使用设备上的鸿蒙账号信息')
-          .fontSize(11).fontColor('rgba(238,238,245,0.3)').textAlign(TextAlign.Center)
+          .onClick(() => { this.doHarmonyLogin(); })
+        Text('将使用设备上的华为账号信息')
+          .fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
       }
       .padding({ left: 20, right: 20, top: 20 })
       .flexGrow(1)
       .width('100%')
       .alignItems(HorizontalAlign.Center)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -697,27 +1437,29 @@ struct Index {
       this.modalHeader('备份数据', () => { this.showBackup = false; })
       Column({ space: 14 }) {
         Text('ℹ️ 备份文件将使用您设置的密码加密。请牢记密码，忘记密码将无法恢复数据。')
-          .fontSize(13).fontColor('rgba(238,238,245,0.65)').lineHeight(22)
-          .padding(14).backgroundColor('rgba(59,130,246,0.1)')
-          .borderRadius(12).border({ width: 1, color: 'rgba(59,130,246,0.2)' })
+          .fontSize(13).fontColor(this.c('rgba(238,238,245,0.65)', '#5C4F43')).lineHeight(22)
+          .padding(14).backgroundColor(this.c('rgba(59,130,246,0.10)', 'rgba(59,130,246,0.08)'))
+          .borderRadius(12).border({ width: 1, color: this.c('rgba(59,130,246,0.2)', 'rgba(59,130,246,0.25)') })
 
         Column({ space: 6 }) {
-          Text('加密密码').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+          Text('加密密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextInput({ text: this.backupPw, placeholder: '设置备份密码' })
             .type(InputType.Password)
             .onChange((v) => { this.backupPw = v; })
-            .backgroundColor('#191920').fontColor('#eeeef5')
-            .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+            .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Column({ space: 6 }) {
-          Text('确认密码').fontSize(12).fontColor('rgba(238,238,245,0.45)')
+          Text('确认密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           TextInput({ text: this.backupPw2, placeholder: '再次输入密码' })
             .type(InputType.Password)
             .onChange((v) => { this.backupPw2 = v; })
-            .backgroundColor('#191920').fontColor('#eeeef5')
-            .border({ width: 1, color: this.backupPw && this.backupPw2 && this.backupPw !== this.backupPw2 ? '#f87171' : 'rgba(255,255,255,0.08)' })
+            .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
+            .border({ width: 1, color: this.backupPw && this.backupPw2 && this.backupPw !== this.backupPw2 ? '#f87171' : this.c('rgba(255,255,255,0.08)', '#E8E2D9') })
             .borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
@@ -726,19 +1468,19 @@ struct Index {
           Text('两次密码不一致').fontSize(12).fontColor('#f87171')
         }
         Text(`将备份 ${this.tokens.length} 个账号`)
-          .fontSize(13).fontColor('rgba(238,238,245,0.35)')
+          .fontSize(13).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
 
         Button('加密备份并下载')
           .width('100%').height(50).borderRadius(15)
-          .backgroundColor(this.backupPw && this.backupPw === this.backupPw2 ? this.accentColor : '#191920')
-          .fontColor(this.backupPw && this.backupPw === this.backupPw2 ? '#fff' : 'rgba(238,238,245,0.3)')
+          .backgroundColor(this.backupPw && this.backupPw === this.backupPw2 ? this.accentColor : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.backupPw && this.backupPw === this.backupPw2 ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doBackup())
       }
       .padding({ left: 20, right: 20, top: 16 })
       .flexGrow(1)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -747,50 +1489,97 @@ struct Index {
   @Builder
   importModal() {
     Column() {
-      this.modalHeader('导入备份', () => { this.showImport = false; })
+      this.modalHeader('导入备份', () => { this.resetImportState(); this.showImport = false; })
       Column({ space: 14 }) {
         Button(this.importFileName ? `已选择: ${this.importFileName}` : '选择备份文件')
           .width('100%').height(44).borderRadius(12)
-          .backgroundColor(this.importFileName ? this.accentColor + '22' : '#191920')
-          .fontColor(this.importFileName ? this.accentColor : 'rgba(238,238,245,0.4)')
+          .backgroundColor(this.importFileName ? this.accentColor + '22' : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.importFileName ? this.accentColor : this.c('rgba(238,238,245,0.65)', '#6B5B50'))
           .fontSize(13).fontWeight(500)
           .onClick(() => this.selectImportFile())
 
         Column({ space: 6 }) {
-          Text('备份内容（粘贴加密文本）').fontSize(12).fontColor('rgba(238,238,245,0.45)')
-          TextArea({ text: this.importText, placeholder: '粘贴备份内容…' })
+          Text('备份内容（粘贴加密或 OTP 文本）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          Text('支持Proton Authenticator备份文件或格式明文导入').fontSize(11).fontColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
+          TextArea({ text: this.importText, placeholder: '粘贴备份内容，或粘贴 otpauth:// 格式内容…' })
             .onChange((v) => { this.importText = v; })
-            .height(120).backgroundColor('#191920').fontColor('#eeeef5')
-            .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
-            .placeholderColor('rgba(238,238,245,0.25)').fontSize(12).fontFamily('monospace')
+            .height(120).backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
+            .placeholderColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).fontSize(12).fontFamily('monospace')
         }.alignItems(HorizontalAlign.Start).width('100%')
 
         Column({ space: 6 }) {
-          Text('解密密码').fontSize(12).fontColor('rgba(238,238,245,0.45)')
-          TextInput({ text: this.importPw, placeholder: '输入备份时设置的密码' })
+          Text('解密密码（加密备份时才需要填写）').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          TextInput({ text: this.importPw, placeholder: '输入备份时设置的密码（明文内容无需填写）' })
             .type(InputType.Password)
             .onChange((v) => { this.importPw = v; })
-            .backgroundColor('#191920').fontColor('#eeeef5')
-            .border({ width: 1, color: 'rgba(255,255,255,0.08)' }).borderRadius(12)
+            .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+            .placeholderColor(this.c('rgba(238,238,245,0.45)', '#9B8B80'))
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
             .height(44).padding({ left: 14, right: 14 })
         }.alignItems(HorizontalAlign.Start).width('100%')
 
-        Button('解密并导入')
+        Button('导入')
           .width('100%').height(50).borderRadius(15)
-          .backgroundColor(this.importText && this.importPw ? this.accentColor : '#191920')
-          .fontColor(this.importText && this.importPw ? '#fff' : 'rgba(238,238,245,0.3)')
+          .backgroundColor(this.importText ? this.accentColor : this.c('#191920', '#F5F0EA'))
+          .fontColor(this.importText ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doImport())
       }
       .padding({ left: 20, right: 20, top: 16 })
       .flexGrow(1)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
 
   // ── Builder: Theme Modal ────────────────────────────────────────
+  @Builder
+  memberBenefits() {
+    Column({ space: 10 }) {
+      ForEach(
+        ['无限制添加动态口令', '加密备份数据导入导出', '查看 Secret Key', '云端数据自动同步'],
+        (item: string) => {
+          Row({ space: 8 }) {
+            Text('✓').fontSize(12).fontWeight(700).fontColor(this.accentColor)
+            Text(item).fontSize(13).fontColor(this.c('rgba(238,238,245,0.7)', '#5C4F43'))
+          }.width('100%')
+        },
+        (item: string) => item
+      )
+    }
+    .padding(14).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(14).width('100%')
+    .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
+  }
+
+  @Builder
+  cloudSyncToggleRow() {
+    Row() {
+      Column({ space: 2 }) {
+        Text('云同步').fontSize(14).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+        Text(this.isMember ? '关闭后仅保留本地，仍可手动备份' : '开通会员后可用')
+          .fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Toggle({ type: ToggleType.Switch, isOn: this.isMember ? this.cloudSyncEnabled : false })
+        .selectedColor(this.accentColor)
+        .enabled(this.isMember)
+        .onChange((on: boolean) => {
+          this.onCloudSyncToggle(on);
+        })
+    }
+    .width('100%')
+    .padding(14)
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(this.c('#191920', '#FFFFFF'))
+    .borderRadius(14)
+    .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
+    .opacity(this.isMember ? 1 : 0.4)
+  }
+
   @Builder
   themeModal() {
     Column() {
@@ -809,7 +1598,7 @@ struct Index {
               .border({ width: 3, color: this.currentTheme.name === t.name ? '#fff' : Color.Transparent })
               .shadow({ radius: this.currentTheme.name === t.name ? 18 : 12, color: t.color + (this.currentTheme.name === t.name ? '' : '55'), offsetX: 0, offsetY: 4 })
               Text(t.name).fontSize(10).textAlign(TextAlign.Center).lineHeight(13)
-                .fontColor(this.currentTheme.name === t.name ? '#eeeef5' : 'rgba(238,238,245,0.45)')
+                .fontColor(this.currentTheme.name === t.name ? this.c('#eeeef5', '#2C1810') : this.c('rgba(238,238,245,0.65)', '#6B5B50'))
                 .fontWeight(this.currentTheme.name === t.name ? 600 : 400)
             }.alignItems(HorizontalAlign.Center)
             .onClick(() => this.selectTheme(idx))
@@ -820,7 +1609,7 @@ struct Index {
       .columnsGap(14).rowsGap(14)
       .padding({ left: 16, right: 16, top: 8 })
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -829,28 +1618,28 @@ struct Index {
   @Builder
   deleteConfirmDialog() {
     Column() {
-      Text('确认删除').fontSize(16).fontWeight(700).fontColor('#eeeef5').margin({ bottom: 8 })
-      Text(`确定要删除「${this.deleteTarget.brand}」吗？${this.isMember ? '\n选择删除方式：' : '\n此操作不可撤销'}`)
-        .fontSize(14).fontColor('rgba(238,238,245,0.6)').textAlign(TextAlign.Center).margin({ bottom: 20 }).lineHeight(22)
-      if (this.isMember) {
+      Text('确认删除').fontSize(16).fontWeight(700).fontColor(this.c('#eeeef5', '#2C1810')).margin({ bottom: 8 })
+      Text(`确定要删除「${this.deleteTarget.brand}」吗？${this.isMember && this.loggedIn ? '\n选择删除方式：' : '\n此操作不可撤销'}`)
+        .fontSize(14).fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).textAlign(TextAlign.Center).margin({ bottom: 20 }).lineHeight(22)
+      if (this.isMember && this.loggedIn) {
         Row({ space: 10 }) {
-          Button('仅本地').flexGrow(1).backgroundColor('rgba(255,255,255,0.08)')
-            .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(12)
-            .fontColor('rgba(238,238,245,0.7)').fontSize(14)
+          Button('仅本地').flexGrow(1).backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.04)'))
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
+            .fontColor(this.c('rgba(238,238,245,0.7)', '#5C4F43')).fontSize(14)
             .onClick(() => this.deleteToken(true))
           Button('本地+云端').flexGrow(1).backgroundColor('#ef4444').borderRadius(12)
             .fontColor('#fff').fontSize(14).fontWeight(650)
             .onClick(() => this.deleteToken(false))
         }.width('100%')
-        Button('取消').width('100%').marginTop(10).backgroundColor(Color.Transparent)
-          .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(12)
-          .fontColor('rgba(238,238,245,0.6)').fontSize(14)
+        Button('取消').width('100%').margin({ top: 10 }).backgroundColor(Color.Transparent)
+          .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
+          .fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).fontSize(14)
           .onClick(() => { this.showDeleteConfirm = false; this.deleteTarget = {} as Token; })
       } else {
         Row({ space: 10 }) {
           Button('取消').flexGrow(1).backgroundColor(Color.Transparent)
-            .border({ width: 1, color: 'rgba(255,255,255,0.1)' }).borderRadius(12)
-            .fontColor('rgba(238,238,245,0.6)').fontSize(14)
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
+            .fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).fontSize(14)
             .onClick(() => { this.showDeleteConfirm = false; this.deleteTarget = {} as Token; })
           Button('确认删除').flexGrow(1).backgroundColor('#ef4444').borderRadius(12)
             .fontColor('#fff').fontSize(14).fontWeight(650)
@@ -858,7 +1647,8 @@ struct Index {
         }.width('100%')
       }
     }
-    .padding(24).backgroundColor('#191920').borderRadius(20).width('85%')
+    .padding(24).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(20).width('85%')
+    .shadow({ radius: 24, color: 'rgba(0,0,0,0.15)', offsetX: 0, offsetY: 4 })
   }
 
   // ── Builder: Membership Modal ───────────────────────────────────
@@ -868,44 +1658,129 @@ struct Index {
       this.modalHeader('开通会员', () => { this.showMembership = false; })
       Scroll() {
         Column({ space: 16 }) {
+
           if (this.isMember) {
-            Column({ space: 8 }) {
-              Text('✨ 您已是会员').fontSize(18).fontWeight(700).fontColor(this.accentColor)
-              Text(`有效期至 ${this.memberExpiry}`).fontSize(13).fontColor('rgba(238,238,245,0.5)')
-              Text('享受无限制添加、云端备份、数据同步等特权').fontSize(13).fontColor('rgba(238,238,245,0.5)')
+            // ── 状态 3：已开通 ────────────────────────────────────────
+            Column({ space: 0 }) {
+              Text('✨').fontSize(32).margin({ bottom: 8 })
+              Text('您已是会员').fontSize(17).fontWeight(700).fontColor(this.accentColor)
+              Text('永久有效').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).margin({ top: 4 })
             }
-            .padding(16).backgroundColor(this.accentColor + '18')
-            .border({ width: 1, color: this.accentColor + '30' }).borderRadius(16).width('100%')
+            .width('100%').padding(20).alignItems(HorizontalAlign.Center)
+            .backgroundColor(this.accentColor + '1e')
+            .border({ width: 1, color: this.accentColor + '4d' })
+            .borderRadius(14)
+
+            Column({ space: 6 }) {
+              Text('绑定账号').fontSize(10).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+              Row({ space: 10 }) {
+                if (this.userAvatar && !this.memberAvatarLoadFailed) {
+                  Image(this.userAvatar)
+                    .width(32).height(32).borderRadius(16)
+                    .onError(() => { this.memberAvatarLoadFailed = true; })
+                } else {
+                  Stack() {
+                    Text(this.userName.length > 0 ? this.userName[0].toUpperCase() : '华')
+                      .fontSize(14).fontColor(this.c('#fff', '#fff')).fontWeight(700)
+                  }
+                  .width(32).height(32).borderRadius(16)
+                  .backgroundColor(this.accentColor)
+                }
+                Column({ space: 2 }) {
+                  Text(this.userName || this.boundAccount || '华为用户').fontSize(13).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+                  Text('换设备登录同账号可恢复会员').fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+                }.alignItems(HorizontalAlign.Start)
+              }.width('100%')
+            }
+            .padding(12).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(12).width('100%')
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
+            .alignItems(HorizontalAlign.Start)
+
+            this.memberBenefits()
+            this.cloudSyncToggleRow()
+
           } else {
-            Column({ space: 12 }) {
-              Text('👑').fontSize(48)
-              Text('¥19.90').fontSize(36).fontWeight(800).fontColor('#eeeef5')
-              Text('/年').fontSize(14).fontColor('rgba(238,238,245,0.4)')
+            // ── 共用：icon + 价格 ─────────────────────────────────────
+            Column() {
+              Text('👑').fontSize(40)
+              Row({ space: 4 }) {
+                Text('¥19.90').fontSize(28).fontWeight(800).fontColor(this.c('#eeeef5', '#2C1810'))
+                Text('永久会员').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+              }
+              .alignItems(VerticalAlign.Bottom)
+              .margin({ top: 6 })
             }
-            .alignItems(HorizontalAlign.Center).padding({ top: 32, bottom: 24 }).width('100%')
+            .alignItems(HorizontalAlign.Center)
+            .padding({ top: 10, bottom: 10 })
+            .width('100%')
 
-            // Benefits
-            Column({ space: 12 }) {
-              ForEach(['无限制添加动态口令', '加密备份数据导入导出', '查看 Secret Key', '云端数据每小时自动同步'], (item: string) => {
-                Row({ space: 10 }) {
-                  Text('✓').fontSize(16).fontWeight(700).fontColor(this.accentColor)
-                  Text(item).fontSize(14).fontColor('rgba(238,238,245,0.7)')
-                }.width('100%')
-              }, (item: string) => item)
+            // ── 共用：权益列表 ────────────────────────────────────────
+            this.memberBenefits()
+            this.cloudSyncToggleRow()
+
+            if (!this.loggedIn) {
+              // ── 状态 1：未登录 ──────────────────────────────────────
+              Column({ space: 4 }) {
+                Text('购买会员需要先登录').fontSize(12).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43'))
+                Text('会员将绑定至您的华为账号').fontSize(11).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+              }
+              .width('100%').padding(10).alignItems(HorizontalAlign.Center)
+              .backgroundColor(this.accentColor + '1a')
+              .border({ width: 1, color: this.accentColor + '40' })
+              .borderRadius(10)
+
+              Button('登录后开通')
+                .width('100%').height(50).borderRadius(15)
+                .backgroundColor(this.accentColor).fontColor('#fff')
+                .fontSize(15).fontWeight(650)
+                .onClick(() => {
+                  this.showMembership = false;
+                  this.loginPhone = '';
+                  this.loginCode = '';
+                  this.loginCodeSent = false;
+                  this.loginCodeCd = 0;
+                  this.showLogin = true;
+                })
+
+            } else {
+              // ── 状态 2：已登录 · 未开通 ─────────────────────────────
+              Row({ space: 8 }) {
+                Text('👤').fontSize(16)
+                Column({ space: 2 }) {
+                  Text('购买后绑定至').fontSize(10).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+                  Text(this.userName || '华为用户').fontSize(12).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810'))
+                }.alignItems(HorizontalAlign.Start)
+              }
+              .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .backgroundColor(this.accentColor + '14')
+              .border({ width: 1, color: this.accentColor + '33' })
+              .borderRadius(10)
+
+              Column({ space: 8 }) {
+                Button('立即开通会员')
+                  .width('100%').height(50).borderRadius(15)
+                  .backgroundColor(this.accentColor).fontColor('#fff')
+                  .fontSize(15).fontWeight(650)
+                  .onClick(() => { this.buyMembership(); })
+
+                Row() {
+                  Text('换机后可用同一账号 ').fontSize(11).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+                  Text('恢复购买')
+                    .fontSize(11).fontColor(this.accentColor)
+                    .onClick(() => { this.restorePurchase(); })
+                }
+                .justifyContent(FlexAlign.Center).width('100%')
+              }
             }
-            .padding(16).backgroundColor('#191920').borderRadius(16).width('100%').margin({ bottom: 24 })
-
-            Button('立即开通会员 ¥19.90/年')
-              .width('100%').height(50).borderRadius(15)
-              .backgroundColor('#f59e0b').fontColor('#fff').fontSize(16).fontWeight(700)
-              .onClick(() => this.buyMembership())
-            Text('演示模式：点击直接开通').fontSize(11).fontColor('rgba(238,238,245,0.3)')
           }
+
         }
-        .padding({ left: 20, right: 20, bottom: 40 })
-      }.scrollBar(BarState.Off).flexGrow(1)
+        .padding({ left: 20, right: 20, top: 8, bottom: 40 })
+        .width('100%').constraintSize({ minHeight: '100%' })
+      }
+      .scrollBar(BarState.Off).layoutWeight(1)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
   }
@@ -924,12 +1799,12 @@ struct Index {
         .backgroundColor(this.accentColor)
         .shadow({ radius: 32, color: this.accentColor + '55', offsetX: 0, offsetY: 8 })
 
-        Text(this.userName).fontSize(20).fontColor('#eeeef5').fontWeight(700)
+        Text(this.userName).fontSize(20).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(700)
         if (this.userPhone) {
-          Text(this.userPhone).fontSize(14).fontColor('rgba(238,238,245,0.4)')
+          Text(this.userPhone).fontSize(14).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
         }
         if (this.harmonyLogin) {
-          Text('鸿蒙账号登录').fontSize(12).fontColor(this.accentColor).fontWeight(500)
+          Text('华为账号登录').fontSize(12).fontColor(this.accentColor).fontWeight(500)
             .padding({ left: 12, right: 12, top: 4, bottom: 4 })
             .backgroundColor(this.accentColor + '15')
             .borderRadius(8)
@@ -945,6 +1820,12 @@ struct Index {
             this.userName = '';
             this.userPhone = '';
             this.userAvatar = '';
+            this.userOpenId = '';
+            this.harmonyLogin = false;
+            this.securityLocked = false;
+            this.securityAuthFailed = false;
+            saveLogin(false, '', '', '', false);
+            stopAutoSync();
             this.toast('已退出登录');
           })
       }
@@ -953,9 +1834,73 @@ struct Index {
       .alignItems(HorizontalAlign.Center)
       .flexGrow(1)
     }
-    .width('100%').height('100%').backgroundColor('#0d0d12')
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
     .position({ x: 0, y: 0 }).zIndex(400)
+  }
+
+  // ── Builder: Security lock overlay ──────────────────────────────
+  @Builder
+  securityLockOverlay() {
+    Stack() {
+      // Decorative brand-icon backdrop
+      ForEach(this.decorativeIcons, (icon: DecorativeIcon, index: number) => {
+        Image($rawfile('brand-icons/' + icon.iconFile))
+          .width(icon.size)
+          .height(icon.size)
+          .opacity(0.40)
+          .position({ x: `${icon.leftPercent}%`, y: `${icon.topPercent}%` })
+      }, (icon: DecorativeIcon, index: number) => `decor-${index}-${icon.iconFile}`)
+
+      // Center content
+      Column({ space: 16 }) {
+        Image($r('app.media.logo_img'))
+          .width(128).height(128).borderRadius(28)
+          .shadow({ radius: 28, color: this.accentColor + '55', offsetX: 0, offsetY: 8 })
+        Text('星枢令已锁定')
+          .fontSize(20)
+          .fontWeight(700)
+          .fontColor(this.c('#eeeef5', '#2C1810'))
+        Text(this.securityAuthFailed ? '验证失败，请重试' : '正在验证…')
+          .fontSize(13)
+          .fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
+        Text('重新验证')
+          .fontSize(13)
+          .fontColor(this.accentColor)
+          .onClick(() => {
+            this.runSecurityUnlock();
+          })
+      }
+      .alignItems(HorizontalAlign.Center)
+
+      // Bottom fallback "解锁" button
+      if (this.lockFallbackEnabled && (this.securityMode === 'face' || this.securityMode === 'fingerprint') && isSecurityTypeAvailable('lock')) {
+        Column() {
+          Button('解锁')
+            .width('100%')
+            .height(50)
+            .borderRadius(15)
+            .backgroundColor(this.securityAuthFailed ? this.accentColor : this.c('#191920', '#F5F0EA'))
+            .fontColor(this.securityAuthFailed ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+            .fontSize(15)
+            .fontWeight(650)
+            .enabled(this.securityAuthFailed)
+            .onClick(() => {
+              this.runLockFallbackUnlock();
+            })
+        }
+        .width('100%')
+        .padding({ left: 20, right: 20 })
+        .position({ x: 0, y: '100%' })
+        .markAnchor({ x: 0, y: '100%' })
+        .translate({ y: -50 })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.c('#0d0d12', '#FAF7F2'))
+    .position({ x: 0, y: 0 })
+    .zIndex(900)
   }
 
   // ── Build ───────────────────────────────────────────────────────
@@ -969,6 +1914,7 @@ struct Index {
             otpMap: this.otpMap,
             timeLeft: this.timeLeft_,
             accentColor: this.accentColor,
+            isDark: this.isDark,
             searching: $searching,
             searchQ: $searchQ,
             onEdit: (tok: Token) => {
@@ -979,8 +1925,14 @@ struct Index {
               this.confirmDelete = false;
             },
             onCopy: (code: string, brand: string) => this.copyCode(code, brand),
+            onDelete: (tok: Token) => this.requestDeleteToken(tok),
             onNavHide: () => { this.navVisible = false; },
             onNavShow: () => { this.navVisible = true; },
+            isMember: this.isMember,
+            loggedIn: this.loggedIn,
+            onSync: (done: () => void) => {
+              this.cloudRestore().finally(done);
+            },
           })
         }
         .tabBar(this.tabIcon('home', 0))
@@ -988,6 +1940,9 @@ struct Index {
         TabContent() {
           ScanView({
             accentColor: this.accentColor,
+            isDark: this.isDark,
+            navBottomPad: 60 + this.navSafeBottom + 16,
+            isActive: this.currentTab === 1,
             onAdd: (brand: string, account: string, secret: string) => {
               this.addToken(brand, account, secret);
             },
@@ -1006,7 +1961,7 @@ struct Index {
             themeName: this.currentTheme.name,
             harmonyLogin: this.harmonyLogin,
             isMember: this.isMember,
-            memberExpiry: this.memberExpiry,
+            boundAccount: this.boundAccount,
             onLoginTap: () => {
               this.loginPhone = ''; this.loginCode = ''; this.loginCodeSent = false; this.loginCodeCd = 0;
               this.loginNickname = '';
@@ -1017,7 +1972,19 @@ struct Index {
               this.loginTab = 1;
               this.showLogin = true;
             },
-            onLogout: () => { this.loggedIn = false; this.userName = ''; this.userPhone = ''; this.userAvatar = ''; this.toast('已退出登录'); },
+            onLogout: () => {
+              this.loggedIn = false;
+              this.userName = '';
+              this.userPhone = '';
+              this.userAvatar = '';
+              this.userOpenId = '';
+              this.harmonyLogin = false;
+              this.securityLocked = false;
+              this.securityAuthFailed = false;
+              saveLogin(false, '', '', '', false);
+              stopAutoSync();
+              this.toast('已退出登录');
+            },
             onBackupTap: () => {
               if (!this.isMember) { this.toast('备份功能需要开通会员'); this.showMembership = true; return; }
               this.backupPw = ''; this.backupPw2 = ''; this.showBackup = true;
@@ -1030,6 +1997,23 @@ struct Index {
             onAccountTap: () => { this.showAccountInfo = true; },
             onMembershipTap: () => { this.showMembership = true; },
             onFeedbackTap: () => { this.showFeedback = true; },
+            onSecurityTap: () => {
+              if (!this.loggedIn) {
+                this.toast('请先登录');
+                this.showLogin = true;
+                return;
+              }
+              this.showSecurity = true;
+            },
+            onToggleMode: () => {
+              this.isDark = !this.isDark;
+              saveThemeMode(this.isDark);
+              this.updateStatusBarColor();
+            },
+            onAboutTap: () => { this.showAbout = true; },
+            isDark: this.isDark,
+            onNavHide: () => { this.navVisible = false; },
+            onNavShow: () => { this.navVisible = true; },
           })
         }
         .tabBar(this.tabIcon('profile', 2))
@@ -1043,24 +2027,57 @@ struct Index {
       })
       // Hide the default tab bar — we use our custom floating nav
       .barWidth(0)
-      .padding({ top: 44, bottom: 80 })
+      .barHeight(0)
+      .padding({ top: 44 })
 
       // ── Custom floating bottom nav ──────────────────────────────
       this.bottomNav()
 
       // ── Modals (overlaid on top) ────────────────────────────────
       if (this.editToken.id) { this.editModal() }
+      if (this.showQrToken !== null && this.isMember) { this.qrModal() }
       if (this.showLogin)  { this.loginModal() }
       if (this.showBackup) { this.backupModal() }
       if (this.showImport) { this.importModal() }
       if (this.showTheme)  { this.themeModal() }
       if (this.showAccountInfo) { this.accountInfoModal() }
       if (this.showMembership) { this.membershipModal() }
+      if (this.showSecurity) {
+        SecurityView({
+          accentColor: this.accentColor,
+          isDark: this.isDark,
+          mode: this.securityMode,
+          onModeChange: (m: SecurityMode) => { this.securityMode = m; },
+          lockFallbackEnabled: this.lockFallbackEnabled,
+          onLockFallbackChange: (enabled: boolean) => {
+            this.lockFallbackEnabled = enabled;
+            saveLockFallbackEnabled(enabled);
+          },
+          onClose: () => { this.showSecurity = false; },
+          onUnavailable: (msg: string) => { this.toast(msg); }
+        })
+          .position({ x: 0, y: 0 })
+          .zIndex(400)
+      }
       if (this.showFeedback) {
         FeedbackView({
           accentColor: this.accentColor,
+          isDark: this.isDark,
           onClose: () => { this.showFeedback = false; }
         })
+          .position({ x: 0, y: 0 })
+          .zIndex(400)
+      }
+      if (this.showAbout) {
+        AboutView({
+          accentColor: this.accentColor,
+          isDark: this.isDark,
+          showAgreement: $showAgreement,
+          showPrivacy: $showPrivacy,
+          onClose: () => { this.showAbout = false; }
+        })
+          .position({ x: 0, y: 0 })
+          .zIndex(400)
       }
       if (this.showDeleteConfirm) {
         Column() {
@@ -1069,6 +2086,11 @@ struct Index {
         .width('100%').height('100%').backgroundColor('rgba(0,0,0,0.6)')
         .alignItems(HorizontalAlign.Center).justifyContent(FlexAlign.Center)
         .zIndex(999)
+      }
+
+      // ── App lock (cold start / return to foreground) ────────────
+      if (this.securityLocked) {
+        this.securityLockOverlay()
       }
 
       // ── Toast ───────────────────────────────────────────────────
@@ -1085,6 +2107,6 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#0d0d12')
+    .backgroundColor(this.isDark ? '#0d0d12' : '#FAF7F2')
   }
 }
