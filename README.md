@@ -1,4 +1,4 @@
-# 星枢令 · ArcaneKey
+<h1 align="center">星枢令 · ArcaneKey</h1>
 
 <p align="center">
   <img src="harmonyos/AppScope/resources/base/media/app_icon.png" width="120" height="120" alt="星枢令" style="border-radius:24px"/>
@@ -18,8 +18,10 @@
 
 <p align="center">
   <img src="image/miniprogram-qrcode.jpg" width="200" alt="星枢令微信小程序二维码"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="image/harmonyos-appgallery-qrcode.png" width="200" alt="星枢令鸿蒙应用商店二维码"/>
   <br/>
-  <sub>微信扫码，无需安装，直接开始使用</sub>
+  <sub>左：微信扫码直接使用小程序　　右：扫码前往华为应用市场下载鸿蒙 App</sub>
 </p>
 
 ---
@@ -40,9 +42,9 @@
 
 ## 立即体验
 
-**微信小程序**：扫描上方二维码，打开即用，无需下载安装。
+**微信小程序**：扫描上方左侧二维码，打开即用，无需下载安装。
 
-**鸿蒙 App**：源码开放，可在 DevEco Studio 中自行编译运行。
+**鸿蒙 App**：扫描上方右侧二维码，前往华为应用市场下载安装。
 
 ## 隐私
 
