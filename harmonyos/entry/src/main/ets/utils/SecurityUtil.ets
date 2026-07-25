@@ -1,6 +1,12 @@
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { SecurityMode } from './StorageUtil';
 
+export interface AuthOutcome {
+  ok: boolean;
+  /** userAuth.UserAuthResultCode value, or -1 for local/NAPI failure */
+  code: number;
+}
+
 function toAuthType(mode: SecurityMode): userAuth.UserAuthType | null {
   if (mode === 'face') {
     return userAuth.UserAuthType.FACE;
@@ -9,7 +15,6 @@ function toAuthType(mode: SecurityMode): userAuth.UserAuthType | null {
     return userAuth.UserAuthType.FINGERPRINT;
   }
   if (mode === 'lock') {
-    // Lock-screen credential maps to PIN
     return userAuth.UserAuthType.PIN;
   }
   return null;
@@ -21,7 +26,6 @@ export function isSecurityTypeAvailable(mode: SecurityMode): boolean {
     return false;
   }
   try {
-    // Throws BusinessError if unsupported / not enrolled
     userAuth.getAvailableStatus(authType, userAuth.AuthTrustLevel.ATL1);
     return true;
   } catch (_) {
@@ -29,24 +33,38 @@ export function isSecurityTypeAvailable(mode: SecurityMode): boolean {
   }
 }
 
-/**
- * UserAuth requires challenge as Uint8Array with length 0–32.
- * Empty array is rejected by NAPI on device (err 401: "length of challenge cannot exceed 32"
- * / GetUint8ArrayValue fail) — use a short fixed challenge instead.
- */
 function buildChallenge(): Uint8Array {
-  // 16 bytes is within the documented max (32) and accepted by UserAuth NAPI
   return new Uint8Array([
     0x41, 0x72, 0x63, 0x61, 0x6e, 0x65, 0x4b, 0x65,
     0x79, 0x53, 0x65, 0x63, 0x75, 0x72, 0x65, 0x00
   ]);
 }
 
-export function authenticateSecurity(mode: SecurityMode): Promise<boolean> {
-  return new Promise<boolean>((resolve: (value: boolean) => void) => {
+/** True when face/fingerprint failure should auto-route to lock-screen PIN. */
+export function shouldAutoLockFallback(code: number): boolean {
+  if (code === -1) {
+    return true;
+  }
+  if (code === userAuth.UserAuthResultCode.BUSY) {
+    return true;
+  }
+  if (code === userAuth.UserAuthResultCode.FAIL) {
+    return true;
+  }
+  if (code === userAuth.UserAuthResultCode.GENERAL_ERROR) {
+    return true;
+  }
+  if (code === userAuth.UserAuthResultCode.TIMEOUT) {
+    return true;
+  }
+  return false;
+}
+
+export function authenticateSecurity(mode: SecurityMode): Promise<AuthOutcome> {
+  return new Promise<AuthOutcome>((resolve: (value: AuthOutcome) => void) => {
     const authType = toAuthType(mode);
     if (authType === null) {
-      resolve(true);
+      resolve({ ok: true, code: userAuth.UserAuthResultCode.SUCCESS });
       return;
     }
     try {
@@ -61,7 +79,11 @@ export function authenticateSecurity(mode: SecurityMode): Promise<boolean> {
       const instance: userAuth.UserAuthInstance = userAuth.getUserAuthInstance(authParam, widgetParam);
       const callback: userAuth.IAuthCallback = {
         onResult: (result: userAuth.UserAuthResult) => {
-          resolve(result.result === userAuth.UserAuthResultCode.SUCCESS);
+          const code: number = result.result;
+          resolve({
+            ok: code === userAuth.UserAuthResultCode.SUCCESS,
+            code: code
+          });
         }
       };
       instance.on('result', callback);
@@ -69,7 +91,7 @@ export function authenticateSecurity(mode: SecurityMode): Promise<boolean> {
     } catch (e) {
       console.error('[SecurityUtil] authenticateSecurity failed: ' +
         (e instanceof Error ? e.message : String(e)));
-      resolve(false);
+      resolve({ ok: false, code: -1 });
     }
   });
 }

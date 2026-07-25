@@ -200,9 +200,9 @@ struct Index {
     this.securityUnlocking = true;
     this.securityAuthFailed = false;
     try {
-      const ok = await authenticateSecurity(this.securityMode);
-      this.securityLocked = !ok;
-      this.securityAuthFailed = !ok;
+      const outcome = await authenticateSecurity(this.securityMode);
+      this.securityLocked = !outcome.ok;
+      this.securityAuthFailed = !outcome.ok;
     } finally {
       this.securityUnlocking = false;
     }
@@ -214,9 +214,9 @@ struct Index {
     }
     this.securityUnlocking = true;
     try {
-      const ok = await authenticateSecurity('lock');
-      this.securityLocked = !ok;
-      if (ok) {
+      const outcome = await authenticateSecurity('lock');
+      this.securityLocked = !outcome.ok;
+      if (outcome.ok) {
         this.securityAuthFailed = false;
       }
     } finally {

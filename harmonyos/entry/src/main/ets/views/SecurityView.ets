@@ -74,8 +74,8 @@ export struct SecurityView {
     }
 
     // Require successful auth before enabling
-    const ok: boolean = await authenticateSecurity(target);
-    if (!ok) {
+    const outcome = await authenticateSecurity(target);
+    if (!outcome.ok) {
       this.onUnavailable('验证失败，未能开启');
       this.applyModeVisual('off');
       return;
