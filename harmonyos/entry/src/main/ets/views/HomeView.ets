@@ -66,6 +66,8 @@ export struct HomeView {
               .fontColor([this.c('rgba(238,238,245,0.55)', '#5C4F43')])
               .fontSize(18)
             TextInput({ text: this.searchQ, placeholder: '搜索品牌或账号' })
+              .id('home_search_input')
+              .defaultFocus(true)
               .flexGrow(1)
               .backgroundColor(Color.Transparent)
               .fontColor(this.c('#eeeef5', '#2C1810'))
@@ -74,6 +76,13 @@ export struct HomeView {
               .height(28)
               .padding(0)
               .onChange((v) => { this.searchQ = v; })
+              .onAppear(() => {
+                setTimeout(() => {
+                  try {
+                    focusControl.requestFocus('home_search_input');
+                  } catch (_) {}
+                }, 50);
+              })
             // Clear button
             if (this.searchQ.length > 0) {
               Text('×')
