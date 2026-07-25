@@ -135,6 +135,7 @@ struct Index {
   @State decorativeIcons: DecorativeIcon[] = [];
   // EntryAbility.onForeground bumps this; @Watch re-locks when security is on
   @StorageLink('appForegroundSeq') @Watch('onForegroundSeqChanged') foregroundSeq: number = 0;
+  @StorageLink('appBackgroundSeq') @Watch('onBackgroundSeqChanged') backgroundSeq: number = 0;
 
   // ── Search ──────────────────────────────────────────────────────
   @State searching: boolean = false;
@@ -189,6 +190,17 @@ struct Index {
       this.securityLocked = true;
       this.randomizeDecorativeIcons();
       this.runSecurityUnlock();
+    }
+  }
+
+  private onBackgroundSeqChanged(): void {
+    // Leave scan so customScan releases the camera (face unlock needs it)
+    if (this.currentTab === 1) {
+      this.currentTab = 0;
+    }
+    if (this.searching) {
+      this.searching = false;
+      this.searchQ = '';
     }
   }
 

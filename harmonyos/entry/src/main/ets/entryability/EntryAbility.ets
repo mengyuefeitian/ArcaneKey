@@ -13,6 +13,7 @@ export default class EntryAbility extends UIAbility {
     // Signal not ready yet so Index.ets defers cloud DB init until auth completes
     AppStorage.setOrCreate('agcAuthReady', false);
     AppStorage.setOrCreate('appForegroundSeq', 0);
+    AppStorage.setOrCreate('appBackgroundSeq', 0);
     AppStorage.setOrCreate('context', this.context);
     try {
       const cfgBytes = await this.context.resourceManager.getRawFileContent('agconnect-services.json');
@@ -66,5 +67,9 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate('appForegroundSeq', prev + 1);
   }
 
-  onBackground(): void {}
+  onBackground(): void {
+    // Bump so Index can leave scan tab and free the camera before re-auth
+    const prev = AppStorage.get<number>('appBackgroundSeq') ?? 0;
+    AppStorage.setOrCreate('appBackgroundSeq', prev + 1);
+  }
 }
