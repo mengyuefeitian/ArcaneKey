@@ -20,7 +20,12 @@ import { Logo } from '../components/Logo';
 import { FeedbackView } from '../views/FeedbackView';
 import { AboutView } from '../views/AboutView';
 import { SecurityView } from '../views/SecurityView';
-import { authenticateSecurity, isSecurityTypeAvailable } from '../utils/SecurityUtil';
+import {
+  authenticateSecurity,
+  isSecurityTypeAvailable,
+  shouldAutoLockFallback,
+  AuthOutcome
+} from '../utils/SecurityUtil';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -193,18 +198,37 @@ struct Index {
       this.securityAuthFailed = false;
       return;
     }
-    // Debounce: cold start can fire loadData unlock + onForeground seq together
     if (this.securityUnlocking) {
       return;
     }
     this.securityUnlocking = true;
     this.securityAuthFailed = false;
+    let handoffToFallback: boolean = false;
     try {
-      const outcome = await authenticateSecurity(this.securityMode);
-      this.securityLocked = !outcome.ok;
-      this.securityAuthFailed = !outcome.ok;
+      const outcome: AuthOutcome = await authenticateSecurity(this.securityMode);
+      if (outcome.ok) {
+        this.securityLocked = false;
+        this.securityAuthFailed = false;
+        return;
+      }
+      const canFallback: boolean =
+        this.lockFallbackEnabled &&
+        (this.securityMode === 'face' || this.securityMode === 'fingerprint') &&
+        isSecurityTypeAvailable('lock') &&
+        shouldAutoLockFallback(outcome.code);
+      if (canFallback) {
+        this.securityLocked = true;
+        this.securityAuthFailed = false;
+        handoffToFallback = true;
+        return;
+      }
+      this.securityLocked = true;
+      this.securityAuthFailed = true;
     } finally {
       this.securityUnlocking = false;
+    }
+    if (handoffToFallback) {
+      await this.runLockFallbackUnlock();
     }
   }
 
@@ -214,10 +238,12 @@ struct Index {
     }
     this.securityUnlocking = true;
     try {
-      const outcome = await authenticateSecurity('lock');
+      const outcome: AuthOutcome = await authenticateSecurity('lock');
       this.securityLocked = !outcome.ok;
       if (outcome.ok) {
         this.securityAuthFailed = false;
+      } else {
+        this.securityAuthFailed = true;
       }
     } finally {
       this.securityUnlocking = false;
