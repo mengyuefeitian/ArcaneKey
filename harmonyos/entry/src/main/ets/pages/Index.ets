@@ -939,6 +939,9 @@ struct Index {
       this.resetImportState();
       this.showImport = false;
       this.toast(`成功导入 ${imported.length} 个账号`);
+      if (imported.length > 0) {
+        this.maybeSmartCommentAfterSuccess();
+      }
     } catch (_) { this.toast('解密失败，请检查密码'); }
   }
 
