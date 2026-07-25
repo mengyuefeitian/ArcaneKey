@@ -9,10 +9,11 @@ import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { BRAND_ICONS, BrandIconConfig } from '../model/BrandIcons';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled, loadOpenCount, saveOpenCount } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
+import { showAppComment, canSmartPromptComment, markCommentPrompted } from '../utils/CommentUtil';
 import { HomeView } from '../views/HomeView';
 import { ScanView } from '../views/ScanView';
 import { ProfileView } from '../views/ProfileView';
@@ -536,8 +537,50 @@ struct Index {
         this.randomizeDecorativeIcons();
         this.runSecurityUnlock();
       }
+
+      this.bumpOpenCountAndMaybePrompt();
     } catch (_) {
       this.tokens = INITIAL_TOKENS.slice();
+    }
+  }
+
+  private async openAppComment(fromSmart: boolean): Promise<void> {
+    if (this.securityLocked) {
+      return;
+    }
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) {
+      this.toast('上下文错误，请重启应用');
+      return;
+    }
+    if (fromSmart) {
+      const allowed = await canSmartPromptComment();
+      if (!allowed) {
+        return;
+      }
+      await markCommentPrompted();
+    }
+    const msg = await showAppComment(ctx, true);
+    if (msg.length > 0) {
+      this.toast(msg);
+    }
+  }
+
+  private maybeSmartCommentAfterSuccess(): void {
+    if (this.securityLocked) {
+      return;
+    }
+    setTimeout(() => {
+      this.openAppComment(true);
+    }, 700);
+  }
+
+  private async bumpOpenCountAndMaybePrompt(): Promise<void> {
+    const n = await loadOpenCount();
+    const next = n + 1;
+    await saveOpenCount(next);
+    if (next >= 3) {
+      this.maybeSmartCommentAfterSuccess();
     }
   }
 
@@ -745,6 +788,7 @@ struct Index {
           fs.closeSync(destF);
           this.showBackup = false;
           this.toast(`已备份 ${this.tokens.length} 个账号到下载目录`);
+          this.maybeSmartCommentAfterSuccess();
         } else {
           this.toast('保存取消');
         }
@@ -810,6 +854,7 @@ struct Index {
     } else {
       this.toast(`成功导入 ${actualToAdd.length} 个账号`);
     }
+    this.maybeSmartCommentAfterSuccess();
     if (this.isMember && this.cloudSyncEnabled && this.loggedIn) { this.cloudBackup(); }
   }
 
@@ -1022,6 +1067,7 @@ struct Index {
       this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
       this.boundAccount = this.userName;
       this.toast('开通成功');
+      this.maybeSmartCommentAfterSuccess();
       this.showMembership = false;
       // Acknowledge purchase to prevent auto-refund after 24h
       try { await acknowledgePurchase(ctx, tokenResult.purchaseToken, tokenResult.purchaseOrderId); } catch (_) {}
@@ -1063,6 +1109,7 @@ struct Index {
         this.isMember = true; // triggers initCloudSyncIfReady() via @Watch
         this.boundAccount = bound;
         this.toast('会员已恢复');
+        this.maybeSmartCommentAfterSuccess();
       } else {
         this.toast('未找到有效购买记录');
       }
@@ -2035,6 +2082,7 @@ struct Index {
             onAccountTap: () => { this.showAccountInfo = true; },
             onMembershipTap: () => { this.showMembership = true; },
             onFeedbackTap: () => { this.showFeedback = true; },
+            onCommentTap: () => { this.openAppComment(false); },
             onSecurityTap: () => {
               if (!this.loggedIn) {
                 this.toast('请先登录');

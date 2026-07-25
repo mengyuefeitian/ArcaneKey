@@ -19,6 +19,7 @@ export struct ProfileView {
   onAccountTap: () => void = () => {};
   onMembershipTap: () => void = () => {};
   onFeedbackTap: () => void = () => {};
+  onCommentTap: () => void = () => {};
   onSecurityTap: () => void = () => {};
   onToggleMode: () => void = () => {};
   onAboutTap: () => void = () => {};
@@ -235,6 +236,23 @@ export struct ProfileView {
             }
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
             .onClick(() => this.onFeedbackTap())
+            Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
+          }
+          // Rate / Comment
+          Column() {
+            Row({ space: 0 }) {
+              Stack() { Text('⭐').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
+              Column({ space: 2 }) {
+                Text('给星枢令评分').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
+                Text('在应用市场留下评价').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+              }.alignItems(HorizontalAlign.Start).flexGrow(1)
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+            }
+            .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+            .onClick(() => this.onCommentTap())
             Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
           }
           // About Us
