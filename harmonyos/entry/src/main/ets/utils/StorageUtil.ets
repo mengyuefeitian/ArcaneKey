@@ -218,3 +218,61 @@ export async function saveLockFallbackEnabled(enabled: boolean): Promise<void> {
     await pref.flush();
   } catch (_) {}
 }
+
+const OPEN_COUNT_KEY = 'ak_open_count';
+const COMMENT_PROMPTED_VER_KEY = 'ak_comment_prompted_ver';
+const COMMENT_DONE_VER_KEY = 'ak_comment_done_ver';
+
+export async function loadOpenCount(): Promise<number> {
+  try {
+    if (!pref) return 0;
+    const val = await pref.get(OPEN_COUNT_KEY, 0);
+    if (typeof val === 'number') return val as number;
+    const n = Number(val);
+    return isNaN(n) ? 0 : n;
+  } catch (_) {
+    return 0;
+  }
+}
+
+export async function saveOpenCount(count: number): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(OPEN_COUNT_KEY, count);
+    await pref.flush();
+  } catch (_) {}
+}
+
+export async function loadCommentPromptedVer(): Promise<string> {
+  try {
+    if (!pref) return '';
+    return String(await pref.get(COMMENT_PROMPTED_VER_KEY, ''));
+  } catch (_) {
+    return '';
+  }
+}
+
+export async function saveCommentPromptedVer(ver: string): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(COMMENT_PROMPTED_VER_KEY, ver);
+    await pref.flush();
+  } catch (_) {}
+}
+
+export async function loadCommentDoneVer(): Promise<string> {
+  try {
+    if (!pref) return '';
+    return String(await pref.get(COMMENT_DONE_VER_KEY, ''));
+  } catch (_) {
+    return '';
+  }
+}
+
+export async function saveCommentDoneVer(ver: string): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(COMMENT_DONE_VER_KEY, ver);
+    await pref.flush();
+  } catch (_) {}
+}
