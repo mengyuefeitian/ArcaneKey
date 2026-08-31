@@ -207,12 +207,13 @@ onNavHide / onNavShow: () => void
 
 ```
 @State query: string = ''         // 常驻顶部搜索框，无自动聚焦
-@State editEntry: PasswordEntry | null = null   // null=关闭；{} 空对象=新增
 @State revealId: string = ''      // 当前显示明文密码的条目 id
-@State confirmDeleteId: string = ''
+@State formOpen: boolean = false  // 新增/编辑表单 overlay
+@State formId: string = ''        // '' = 新增，否则为编辑目标 id
+@State fName/fUrl/fUser/fPass/fNote: string = ''   // 表单字段
 ```
 
-增/改/删表单为内建 `@Builder` overlay（不放 Index.ets），提交后调 `onChange(newList)` 持久化。
+增/改表单为内建 `@Builder` overlay（不放 Index.ets）；表单提交与左滑删除都通过 `@Link passwords` 就地写回，并调 `onChange(newList)` 仅做持久化（单一写路径）。删除直接左滑，无二次确认弹窗。
 
 ### 两级导航
 
@@ -221,12 +222,12 @@ onNavHide / onNavShow: () => void
   - 分组列表：每行 = `Logo({ brand: domain })` + 域名文本 + `N 个账号` 徽标
   - 点击行 → `openDomain = domain`
   - 空态引导文案
-- **Level 1**（`openDomain !== ''`）：
-  - 返回箭头（→ `openDomain = ''`）+ 域名标题 + 常驻搜索框（组内过滤）
+- **Level 1**（`openDomain !== ''` 且 `query === ''`）：
+  - 返回箭头（→ `openDomain = ''`）+ 域名标题 + `+ 添加`
   - 条目卡片：`name` / `url` 行；`username`（点击复制）；`password`（掩码，眼睛切换 `revealId`，点击复制）；`note`（有则显示）
   - 左滑删除（`.swipeAction`，参照 HomeView）；编辑按钮 → 打开表单
   - `+` 新增时预填当前域名
-- **query 非空**（任意层级）：跨全部域名的扁平匹配结果列表，匹配 `name / url / username / domain`（即需求5「即时关联查找」）
+- **query 非空**（任意层级，优先级最高）：跨全部域名的扁平匹配结果列表，匹配 `name / url / username / domain`（即需求5「即时关联查找」）。**不做组内过滤**——搜索是单一的全局行为；在详情页输入会跳到跨域名结果列表。
 
 ### 复制 / toast
 
