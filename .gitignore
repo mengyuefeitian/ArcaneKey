@@ -63,6 +63,9 @@ miniprogram/cloudfunctions/
 *.key
 *credentials*
 *password*
+# 例外：密码管理器功能的 ArkTS 源码文件（非密钥文件，必须版本管理）
+!harmonyos/entry/src/main/ets/model/PasswordEntry.ets
+!harmonyos/entry/src/main/ets/views/PasswordView.ets
 *apikey*
 *secret*
 **/secrets.*
