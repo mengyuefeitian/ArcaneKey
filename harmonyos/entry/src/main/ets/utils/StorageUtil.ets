@@ -1,5 +1,6 @@
 import { preferences } from '@kit.ArkData';
 import { Token, ThemeItem } from '../model/Token';
+import { PasswordEntry } from '../model/PasswordEntry';
 
 const TOKENS_KEY = 'auth_tokens';
 const THEME_KEY = 'auth_theme';
@@ -275,4 +276,28 @@ export async function saveCommentDoneVer(ver: string): Promise<void> {
     await pref.put(COMMENT_DONE_VER_KEY, ver);
     await pref.flush();
   } catch (_) {}
+}
+
+const PASSWORDS_KEY = 'ak_passwords';
+
+export async function loadPasswords(): Promise<PasswordEntry[]> {
+  try {
+    if (!pref) return [];
+    const val = await pref.get(PASSWORDS_KEY, '');
+    if (!val || typeof val !== 'string' || val === '') return [];
+    const parsed = JSON.parse(val as string) as PasswordEntry[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function savePasswords(list: PasswordEntry[]): Promise<void> {
+  try {
+    if (!pref) return;
+    await pref.put(PASSWORDS_KEY, JSON.stringify(list));
+    await pref.flush();
+  } catch (e) {
+    console.error('savePasswords failed: ' + (e as Error).message);
+  }
 }
