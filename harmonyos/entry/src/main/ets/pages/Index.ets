@@ -214,6 +214,7 @@ struct Index {
     this.passwordTabUnlocked = false;
     this.pwOpenDomain = '';
     this.pwFormOpen = false;
+    this.navVisible = true;
     if (this.currentTab === 3) {
       this.currentTab = 0;
     }
@@ -452,6 +453,7 @@ struct Index {
     // 密码新增/编辑表单：先关表单，不退出 App
     if (this.pwFormOpen) {
       this.pwFormOpen = false;
+      this.navVisible = true;
       return true;
     }
     // 密码详情下钻：返回分组列表，不退出 App
