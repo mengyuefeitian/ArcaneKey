@@ -54,6 +54,17 @@ export struct PasswordView {
     return this.passwords.filter((e: PasswordEntry) => entryInDomain(e, this.openDomain));
   }
 
+  private flatMatches(): PasswordEntry[] {
+    const q: string = this.query.trim().toLowerCase();
+    if (!q) return [];
+    return this.passwords.filter((e: PasswordEntry) =>
+      e.name.toLowerCase().indexOf(q) >= 0 ||
+      e.url.toLowerCase().indexOf(q) >= 0 ||
+      e.username.toLowerCase().indexOf(q) >= 0 ||
+      extractDomain(e.url).indexOf(q) >= 0
+    );
+  }
+
   private beginAdd(): void {
     this.formId = '';
     this.fName = '';
@@ -125,19 +136,7 @@ export struct PasswordView {
 
   private visibleGroups(): PasswordGroup[] {
     const groups: PasswordGroup[] = groupByDomain(this.passwords);
-    const q: string = this.query.trim().toLowerCase();
-    if (!q) return groups;
-    const out: PasswordGroup[] = [];
-    for (const g of groups) {
-      if (g.domain.toLowerCase().indexOf(q) >= 0) { out.push(g); continue; }
-      const matched: PasswordEntry[] = g.entries.filter((e: PasswordEntry) =>
-        e.name.toLowerCase().indexOf(q) >= 0 ||
-        e.url.toLowerCase().indexOf(q) >= 0 ||
-        e.username.toLowerCase().indexOf(q) >= 0
-      );
-      if (matched.length > 0) out.push({ domain: g.domain, entries: matched });
-    }
-    return out;
+    return groups;
   }
 
   aboutToDisappear(): void { clearTimeout(this.toastTimer); }
@@ -264,7 +263,7 @@ export struct PasswordView {
         .border({ width: 1, color: this.accentColor + '55' })
         .alignItems(VerticalAlign.Center)
 
-        if (this.openDomain === '') {
+        if (this.openDomain === '' && this.query.trim() === '') {
           Row({ space: 16 }) {
             Text('+ 添加').fontSize(13).fontColor(this.accentColor)
               .onClick(() => { this.beginAdd(); })
@@ -276,7 +275,27 @@ export struct PasswordView {
           .width('100%').padding({ left: 20, right: 20, bottom: 6 }).justifyContent(FlexAlign.Start)
         }
 
-        if (this.openDomain !== '') {
+        if (this.query.trim() !== '') {
+          // 全局扁平搜索结果
+          List({ space: 10 }) {
+            if (this.flatMatches().length === 0) {
+              ListItem() {
+                Column({ space: 12 }) {
+                  Text('🔍').fontSize(36)
+                  Text('未找到匹配的密码').fontSize(14)
+                    .fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+                }
+                .width('100%').padding({ top: 70, bottom: 70 }).justifyContent(FlexAlign.Center)
+              }
+            }
+            ForEach(this.flatMatches(), (e: PasswordEntry) => {
+              ListItem() { this.entryCard(e) }
+              .swipeAction({ end: () => { this.deleteAction(e) } })
+            }, (e: PasswordEntry) => e.id)
+            ListItem() { Column().height(96) }
+          }
+          .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
+        } else if (this.openDomain !== '') {
           // 详情头
           Row({ space: 8 }) {
             Text('‹ 返回').fontSize(14).fontColor(this.accentColor)
