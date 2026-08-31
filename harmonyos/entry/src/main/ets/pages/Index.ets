@@ -139,7 +139,6 @@ struct Index {
   @StorageLink('appBackgroundSeq') @Watch('onBackgroundSeqChanged') backgroundSeq: number = 0;
 
   // ── Search ──────────────────────────────────────────────────────
-  @State searching: boolean = false;
   @State searchQ: string = '';
 
   // ── Toast ───────────────────────────────────────────────────────
@@ -199,8 +198,7 @@ struct Index {
     if (this.currentTab === 1) {
       this.currentTab = 0;
     }
-    if (this.searching) {
-      this.searching = false;
+    if (this.searchQ) {
       this.searchQ = '';
     }
   }
@@ -1159,29 +1157,7 @@ struct Index {
       .justifyContent(FlexAlign.Center)
       .onClick(() => {
         this.currentTab = 0;
-        if (this.searching) { this.searching = false; this.searchQ = ''; }
-        this.navVisible = true;
-      })
-
-      // 搜索 (紧跟首页)
-      Column({ space: 2 }) {
-        SymbolGlyph($r('sys.symbol.magnifyingglass'))
-          .fontColor([this.searching ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
-          .fontSize(18)
-        Text('搜索')
-          .fontSize(9)
-          .fontWeight(this.searching ? 600 : 500)
-          .fontColor(this.searching ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
-      }
-      .layoutWeight(1)
-      .width('100%')
-      .height('100%')
-      .alignItems(HorizontalAlign.Center)
-      .justifyContent(FlexAlign.Center)
-      .onClick(() => {
-        if (this.currentTab !== 0) { this.currentTab = 0; }
-        this.searching = !this.searching;
-        if (!this.searching) { this.searchQ = ''; }
+        if (this.searchQ) { this.searchQ = ''; }
         this.navVisible = true;
       })
 
@@ -2003,7 +1979,6 @@ struct Index {
             timeLeft: this.timeLeft_,
             accentColor: this.accentColor,
             isDark: this.isDark,
-            searching: $searching,
             searchQ: $searchQ,
             onEdit: (tok: Token) => {
               this.editToken = tok;
@@ -2112,7 +2087,7 @@ struct Index {
       .barMode(BarMode.Fixed)
       .onChange((index: number) => {
         this.currentTab = index;
-        if (this.searching && index !== 0) { this.searching = false; this.searchQ = ''; }
+        if (index !== 0 && this.searchQ) { this.searchQ = ''; }
       })
       // Hide the default tab bar — we use our custom floating nav
       .barWidth(0)
