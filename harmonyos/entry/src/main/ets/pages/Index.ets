@@ -9,7 +9,7 @@ import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { BRAND_ICONS, BrandIconConfig } from '../model/BrandIcons';
 import { totp, timeLeft } from '../utils/TOTP';
-import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled, loadOpenCount, saveOpenCount } from '../utils/StorageUtil';
+import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled, loadOpenCount, saveOpenCount, loadPasswords, savePasswords } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
@@ -27,6 +27,9 @@ import {
   shouldAutoLockFallback,
   AuthOutcome
 } from '../utils/SecurityUtil';
+import { PasswordEntry } from '../model/PasswordEntry';
+import { PasswordView } from '../views/PasswordView';
+import { extractDomain } from '../utils/DomainUtil';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -141,6 +144,11 @@ struct Index {
   // ── Search ──────────────────────────────────────────────────────
   @State searchQ: string = '';
 
+  // ── Password Manager ───────────────────────────────────────────
+  @State passwords: PasswordEntry[] = [];
+  @State pwOpenDomain: string = '';
+  @State passwordTabUnlocked: boolean = false;
+
   // ── Toast ───────────────────────────────────────────────────────
   @State toastMsg: string = '';
   @State toastVisible: boolean = false;
@@ -200,6 +208,11 @@ struct Index {
     }
     if (this.searchQ) {
       this.searchQ = '';
+    }
+    this.passwordTabUnlocked = false;
+    this.pwOpenDomain = '';
+    if (this.currentTab === 3) {
+      this.currentTab = 0;
     }
   }
 
@@ -433,6 +446,11 @@ struct Index {
       this.qrUri = '';
       return true;
     }
+    // 密码详情下钻：返回分组列表，不退出 App
+    if (this.pwOpenDomain !== '') {
+      this.pwOpenDomain = '';
+      return true;
+    }
     // zIndex 300 — Edit account modal
     if (this.editToken.id) {
       this.editToken = {} as Token;
@@ -499,6 +517,7 @@ struct Index {
 
       const saved = await loadTokens();
       this.tokens = (saved && saved.length > 0) ? saved : INITIAL_TOKENS.slice();
+      this.passwords = await loadPasswords();
       const theme = await loadTheme();
       if (theme) { this.accentColor = theme.color; this.currentTheme = theme; }
       this.isDark = await loadThemeMode();
@@ -707,6 +726,21 @@ struct Index {
       this.toast(`已复制 ${brand} 验证码`);
     } catch (_) { this.toast('复制失败'); }
   }
+
+  private async goPasswordTab(): Promise<void> {
+    if (this.securityMode !== 'off' && this.loggedIn && !this.passwordTabUnlocked) {
+      try {
+        const outcome: AuthOutcome = await authenticateSecurity(this.securityMode);
+        if (!outcome.ok) { this.toast('验证失败'); return; }
+      } catch (_) { this.toast('验证失败'); return; }
+      this.passwordTabUnlocked = true;
+    }
+    this.currentTab = 3;
+    this.navVisible = true;
+  }
+
+  private importPasswordsCsv(): void { this.toast('即将支持'); }
+  private async exportPasswordsCsv(): Promise<void> { this.toast('即将支持'); }
 
   private async doHarmonyLogin(): Promise<void> {
     if (!this.privacyAgreed) { this.toast('请先同意隐私保护协议'); return; }
@@ -1135,6 +1169,10 @@ struct Index {
       SymbolGlyph($r('sys.symbol.person'))
         .fontColor([this.currentTab === 2 ? this.accentColor : this.c('#d0d0dd', '#8888A0')])
         .fontSize(18)
+    } else if (type === 'password') {
+      Image($r('app.media.icon_password'))
+        .width(18).height(18)
+        .fillColor(this.currentTab === 3 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
     }
   }
 
@@ -1160,6 +1198,21 @@ struct Index {
         if (this.searchQ) { this.searchQ = ''; }
         this.navVisible = true;
       })
+
+      // 密码
+      Column({ space: 2 }) {
+        Image($r('app.media.icon_password'))
+          .width(18).height(18)
+          .fillColor(this.currentTab === 3 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
+        Text('密码')
+          .fontSize(9)
+          .fontWeight(this.currentTab === 3 ? 600 : 500)
+          .fontColor(this.currentTab === 3 ? this.accentColor : this.c('#d0d0dd', '#8888A0'))
+      }
+      .layoutWeight(1)
+      .width('100%').height('100%')
+      .alignItems(HorizontalAlign.Center).justifyContent(FlexAlign.Center)
+      .onClick(() => { this.goPasswordTab(); })
 
       // 扫码
       Column({ space: 2 }) {
@@ -2081,10 +2134,29 @@ struct Index {
           })
         }
         .tabBar(this.tabIcon('profile', 2))
+
+        TabContent() {
+          PasswordView({
+            accentColor: this.accentColor,
+            isDark: this.isDark,
+            isMember: this.isMember,
+            loggedIn: this.loggedIn,
+            passwords: $passwords,
+            openDomain: $pwOpenDomain,
+            // 仅持久化。PasswordView 通过 $passwords（@Link）已就地写回，单一写路径。
+            onChange: (list: PasswordEntry[]) => { savePasswords(list); },
+            onImport: () => { this.importPasswordsCsv(); },
+            onExport: () => { this.exportPasswordsCsv(); },
+            onNavHide: () => { this.navVisible = false; },
+            onNavShow: () => { this.navVisible = true; },
+          })
+        }
+        .tabBar(this.tabIcon('password', 3))
       }
       .width('100%')
       .height('100%')
       .barMode(BarMode.Fixed)
+      .scrollable(false)
       .onChange((index: number) => {
         this.currentTab = index;
         if (index !== 0 && this.searchQ) { this.searchQ = ''; }
