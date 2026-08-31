@@ -148,6 +148,7 @@ struct Index {
   // ── Password Manager ───────────────────────────────────────────
   @State passwords: PasswordEntry[] = [];
   @State pwOpenDomain: string = '';
+  @State pwFormOpen: boolean = false;
   @State passwordTabUnlocked: boolean = false;
 
   // ── Toast ───────────────────────────────────────────────────────
@@ -212,6 +213,7 @@ struct Index {
     }
     this.passwordTabUnlocked = false;
     this.pwOpenDomain = '';
+    this.pwFormOpen = false;
     if (this.currentTab === 3) {
       this.currentTab = 0;
     }
@@ -445,6 +447,11 @@ struct Index {
     if (this.showQrToken !== null) {
       this.showQrToken = null;
       this.qrUri = '';
+      return true;
+    }
+    // 密码新增/编辑表单：先关表单，不退出 App
+    if (this.pwFormOpen) {
+      this.pwFormOpen = false;
       return true;
     }
     // 密码详情下钻：返回分组列表，不退出 App
@@ -815,45 +822,44 @@ struct Index {
     if (incoming.length === 0) { this.toast('未识别到有效的密码数据'); return; }
     const keyOf = (e: PasswordEntry): string =>
       extractDomain(e.url) + ' ' + e.username.trim().toLowerCase();
-    const byKey: Record<string, PasswordEntry> = {};
-    for (const e of this.passwords) { byKey[keyOf(e)] = e; }
+    const work: PasswordEntry[] = this.passwords.slice();
+    const idxByKey: Record<string, number> = {};
+    for (let i = 0; i < work.length; i++) { idxByKey[keyOf(work[i])] = i; }
 
     let added = 0;
     let updated = 0;
-    let next: PasswordEntry[] = this.passwords.slice();
     for (const inc of incoming) {
       const k = keyOf(inc);
-      const existing = byKey[k];
-      if (existing) {
-        next = next.map((x: PasswordEntry): PasswordEntry => {
-          if (x.id !== existing.id) return x;
-          return {
-            id: x.id,
-            name: inc.name || x.name,
-            url: inc.url || x.url,
-            username: x.username,
-            password: inc.password || x.password,
-            note: inc.note || x.note,
-            timestamp: new Date().toISOString(),
-          };
-        });
+      const hit = idxByKey[k];
+      if (hit !== undefined) {
+        const x = work[hit];
+        const merged: PasswordEntry = {
+          id: x.id,
+          name: inc.name || x.name,
+          url: inc.url || x.url,
+          username: x.username,
+          password: inc.password || x.password,
+          note: inc.note || x.note,
+          timestamp: new Date().toISOString(),
+        };
+        work[hit] = merged;
         updated++;
       } else {
-        if (!this.isMember && next.length >= FREE_PASSWORD_LIMIT) { continue; }
+        if (!this.isMember && work.length >= FREE_PASSWORD_LIMIT) { continue; }
         const fresh: PasswordEntry = {
           id: (Date.now() + added).toString(),
           name: inc.name, url: inc.url, username: inc.username,
           password: inc.password, note: inc.note,
           timestamp: new Date().toISOString(),
         };
-        next = next.concat([fresh]);
-        byKey[k] = fresh;
+        work.push(fresh);
+        idxByKey[k] = work.length - 1;
         added++;
       }
     }
     const skipped = incoming.length - added - updated;
-    this.passwords = next;
-    savePasswords(next);
+    this.passwords = work;
+    savePasswords(work);
     if (skipped > 0) {
       this.toast(`新增 ${added}，更新 ${updated}，${skipped} 条超出免费上限`);
     } else {
@@ -2263,6 +2269,7 @@ struct Index {
             loggedIn: this.loggedIn,
             passwords: $passwords,
             openDomain: $pwOpenDomain,
+            formOpen: $pwFormOpen,
             // 仅持久化。PasswordView 通过 $passwords（@Link）已就地写回，单一写路径。
             onChange: (list: PasswordEntry[]) => { savePasswords(list); },
             onImport: () => { this.importPasswordsCsv(); },

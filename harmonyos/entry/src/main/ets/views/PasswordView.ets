@@ -18,8 +18,9 @@ export struct PasswordView {
   onNavHide: () => void = () => {};
   onNavShow: () => void = () => {};
 
+  @Link formOpen: boolean;
+
   @State query: string = '';
-  @State private formOpen: boolean = false;
   @State private formId: string = '';
   @State private fName: string = '';
   @State private fUrl: string = '';
@@ -73,6 +74,7 @@ export struct PasswordView {
     this.fPass = '';
     this.fNote = '';
     this.formOpen = true;
+    this.onNavHide();
   }
 
   private beginEdit(e: PasswordEntry): void {
@@ -83,6 +85,7 @@ export struct PasswordView {
     this.fPass = e.password;
     this.fNote = e.note;
     this.formOpen = true;
+    this.onNavHide();
   }
 
   private submitForm(): void {
@@ -122,6 +125,7 @@ export struct PasswordView {
       this.tip('已更新');
     }
     this.formOpen = false;
+    this.onNavShow();
     if (this.openDomain !== '' && this.openDomain !== OTHER_DOMAIN && extractDomain(url) !== this.openDomain) {
       this.openDomain = '';
     }
@@ -130,6 +134,10 @@ export struct PasswordView {
   private removeEntry(e: PasswordEntry): void {
     const next: PasswordEntry[] = this.passwords.filter((x: PasswordEntry) => x.id !== e.id);
     this.passwords = next;
+    if (this.openDomain !== '' && next.filter((x: PasswordEntry) => entryInDomain(x, this.openDomain)).length === 0) {
+      this.openDomain = '';
+      this.revealId = '';
+    }
     this.onChange(next);
     this.tip('已删除');
   }
@@ -210,7 +218,7 @@ export struct PasswordView {
           Text('×').fontSize(20).fontColor(this.c('rgba(238,238,245,0.75)', '#5C4F43'))
         }
         .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.06)')).borderRadius(11).width(36).height(36)
-        .onClick(() => { this.formOpen = false; })
+        .onClick(() => { this.formOpen = false; this.onNavShow(); })
         Text(this.formId === '' ? '新增密码' : '编辑密码')
           .fontSize(17).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
         Text('').width(36).height(36)
@@ -291,7 +299,7 @@ export struct PasswordView {
             ForEach(this.flatMatches(), (e: PasswordEntry) => {
               ListItem() { this.entryCard(e) }
               .swipeAction({ end: () => { this.deleteAction(e) } })
-            }, (e: PasswordEntry) => e.id)
+            }, (e: PasswordEntry) => e.id + '_' + e.name + '_' + e.username + '_' + e.password)
             ListItem() { Column().height(96) }
           }
           .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
@@ -312,7 +320,7 @@ export struct PasswordView {
             ForEach(this.currentEntries(), (e: PasswordEntry) => {
               ListItem() { this.entryCard(e) }
               .swipeAction({ end: () => { this.deleteAction(e) } })
-            }, (e: PasswordEntry) => e.id)
+            }, (e: PasswordEntry) => e.id + '_' + e.name + '_' + e.username + '_' + e.password)
             ListItem() { Column().height(96) }
           }
           .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
@@ -323,7 +331,7 @@ export struct PasswordView {
               ListItem() {
                 Column({ space: 12 }) {
                   Text('🔐').fontSize(36)
-                  Text(this.query ? '未找到匹配的密码' : '暂无密码\n点右上角 + 添加，或导入 CSV')
+                  Text('暂无密码\n点右上角 + 添加，或导入 CSV')
                     .fontSize(14).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
                 }
                 .width('100%').padding({ top: 70, bottom: 70 }).justifyContent(FlexAlign.Center)
@@ -347,7 +355,7 @@ export struct PasswordView {
                 .onClick(() => { this.openDomain = g.domain; })
               }
               .padding({ bottom: 10 })
-            }, (g: PasswordGroup) => g.domain)
+            }, (g: PasswordGroup) => g.domain + '_' + g.entries.length)
             ListItem() { Column().height(96) }
           }
           .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
