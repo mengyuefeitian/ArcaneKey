@@ -6,7 +6,7 @@ import { picker } from '@kit.CoreFileKit';
 import { preferences } from '@kit.ArkData';
 import fs from '@ohos.file.fs';
 import util from '@ohos.util';
-import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
+import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, FREE_PASSWORD_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { BRAND_ICONS, BrandIconConfig } from '../model/BrandIcons';
 import { totp, timeLeft } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled, loadOpenCount, saveOpenCount, loadPasswords, savePasswords } from '../utils/StorageUtil';
@@ -30,6 +30,7 @@ import {
 import { PasswordEntry } from '../model/PasswordEntry';
 import { PasswordView } from '../views/PasswordView';
 import { extractDomain } from '../utils/DomainUtil';
+import { parsePasswordCsv, toCsv } from '../utils/CsvUtil';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -739,8 +740,127 @@ struct Index {
     this.navVisible = true;
   }
 
-  private importPasswordsCsv(): void { this.toast('即将支持'); }
-  private async exportPasswordsCsv(): Promise<void> { this.toast('即将支持'); }
+  private async exportPasswordsCsv(): Promise<void> {
+    if (!this.isMember) {
+      this.toast('导出功能需要开通会员');
+      this.showMembership = true;
+      return;
+    }
+    if (this.passwords.length === 0) { this.toast('暂无密码可导出'); return; }
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('上下文错误，请重启应用'); return; }
+    const fileName = `passwords_${Date.now()}.csv`;
+    const tmpPath = `${ctx.filesDir}/${fileName}`;
+    try {
+      const csv = toCsv(this.passwords);
+      const tmpFile: fs.File = fs.openSync(tmpPath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+      fs.writeSync(tmpFile.fd, csv);
+      fs.closeSync(tmpFile.fd);
+      const savePicker = new picker.DocumentViewPicker(ctx);
+      const opts: SaveOptions = { newFileNames: [fileName] };
+      savePicker.save(opts).then((saveResult: string[]) => {
+        if (saveResult && saveResult.length > 0) {
+          const destUri = saveResult[0];
+          const srcF: fs.File = fs.openSync(tmpPath, fs.OpenMode.READ_ONLY);
+          const st: fs.Stat = fs.statSync(tmpPath);
+          const buf: ArrayBuffer = new ArrayBuffer(st.size);
+          fs.readSync(srcF.fd, buf);
+          fs.closeSync(srcF);
+          const destF: fs.File = fs.openSync(destUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+          fs.writeSync(destF.fd, buf);
+          fs.closeSync(destF);
+          this.toast(`已导出 ${this.passwords.length} 条密码`);
+          this.maybeSmartCommentAfterSuccess();
+        } else {
+          this.toast('保存取消');
+        }
+        try { fs.unlink(tmpPath); } catch (_) {}
+      }).catch(() => {
+        this.toast(`已导出 ${this.passwords.length} 条密码`);
+        try { fs.unlink(tmpPath); } catch (_) {}
+      });
+    } catch (_) { this.toast('导出失败'); }
+  }
+
+  private importPasswordsCsv(): void {
+    if (!this.isMember) {
+      this.toast('导入功能需要开通会员');
+      this.showMembership = true;
+      return;
+    }
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) { this.toast('上下文错误，请重启应用'); return; }
+    const docPicker = new picker.DocumentViewPicker(ctx);
+    docPicker.select({ maxSelectNumber: 1 }).then((result: string[]) => {
+      if (!result || result.length === 0) { this.toast('选择文件取消'); return; }
+      const uri = result[0];
+      const file: fs.File = fs.openSync(uri, fs.OpenMode.READ_ONLY);
+      const stat: fs.Stat = fs.statSync(uri);
+      if (stat.size > 1024 * 1024) {
+        fs.closeSync(file.fd);
+        this.toast('文件过大，请选择小于 1MB 的 CSV');
+        return;
+      }
+      const buf: ArrayBuffer = new ArrayBuffer(stat.size);
+      fs.readSync(file.fd, buf);
+      const decoder = new util.TextDecoder('utf-8');
+      const text = decoder.decodeToString(new Uint8Array(buf));
+      fs.closeSync(file.fd);
+      this.mergePasswordCsv(text);
+    }).catch(() => { this.toast('选择文件取消'); });
+  }
+
+  private mergePasswordCsv(text: string): void {
+    const incoming: PasswordEntry[] = parsePasswordCsv(text);
+    if (incoming.length === 0) { this.toast('未识别到有效的密码数据'); return; }
+    const keyOf = (e: PasswordEntry): string =>
+      extractDomain(e.url) + ' ' + e.username.trim().toLowerCase();
+    const byKey: Record<string, PasswordEntry> = {};
+    for (const e of this.passwords) { byKey[keyOf(e)] = e; }
+
+    let added = 0;
+    let updated = 0;
+    let next: PasswordEntry[] = this.passwords.slice();
+    for (const inc of incoming) {
+      const k = keyOf(inc);
+      const existing = byKey[k];
+      if (existing) {
+        next = next.map((x: PasswordEntry): PasswordEntry => {
+          if (x.id !== existing.id) return x;
+          return {
+            id: x.id,
+            name: inc.name || x.name,
+            url: inc.url || x.url,
+            username: x.username,
+            password: inc.password || x.password,
+            note: inc.note || x.note,
+            timestamp: new Date().toISOString(),
+          };
+        });
+        updated++;
+      } else {
+        if (!this.isMember && next.length >= FREE_PASSWORD_LIMIT) { continue; }
+        const fresh: PasswordEntry = {
+          id: (Date.now() + added).toString(),
+          name: inc.name, url: inc.url, username: inc.username,
+          password: inc.password, note: inc.note,
+          timestamp: new Date().toISOString(),
+        };
+        next = next.concat([fresh]);
+        byKey[k] = fresh;
+        added++;
+      }
+    }
+    const skipped = incoming.length - added - updated;
+    this.passwords = next;
+    savePasswords(next);
+    if (skipped > 0) {
+      this.toast(`新增 ${added}，更新 ${updated}，${skipped} 条超出免费上限`);
+    } else {
+      this.toast(`新增 ${added}，更新 ${updated}`);
+    }
+    this.maybeSmartCommentAfterSuccess();
+  }
 
   private async doHarmonyLogin(): Promise<void> {
     if (!this.privacyAgreed) { this.toast('请先同意隐私保护协议'); return; }
