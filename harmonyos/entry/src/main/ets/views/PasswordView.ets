@@ -57,7 +57,7 @@ export struct PasswordView {
   private beginAdd(): void {
     this.formId = '';
     this.fName = '';
-    this.fUrl = this.openDomain ? 'https://' + this.openDomain : '';
+    this.fUrl = (this.openDomain && this.openDomain !== OTHER_DOMAIN) ? 'https://' + this.openDomain : '';
     this.fUser = '';
     this.fPass = '';
     this.fNote = '';
@@ -111,7 +111,7 @@ export struct PasswordView {
       this.tip('已更新');
     }
     this.formOpen = false;
-    if (this.openDomain !== '' && extractDomain(url) !== this.openDomain) {
+    if (this.openDomain !== '' && this.openDomain !== OTHER_DOMAIN && extractDomain(url) !== this.openDomain) {
       this.openDomain = '';
     }
   }
