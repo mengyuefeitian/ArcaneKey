@@ -1,5 +1,6 @@
 import { PasswordEntry, PasswordGroup, groupByDomain, OTHER_DOMAIN, entryInDomain } from '../model/PasswordEntry';
 import { extractDomain } from '../utils/DomainUtil';
+import { FREE_PASSWORD_LIMIT } from '../model/Token';
 import { Logo } from '../components/Logo';
 import { pasteboard } from '@kit.BasicServicesKit';
 
@@ -18,6 +19,13 @@ export struct PasswordView {
   onNavShow: () => void = () => {};
 
   @State query: string = '';
+  @State private formOpen: boolean = false;
+  @State private formId: string = '';
+  @State private fName: string = '';
+  @State private fUrl: string = '';
+  @State private fUser: string = '';
+  @State private fPass: string = '';
+  @State private fNote: string = '';
   @State private revealId: string = '';
   @State private toastMsg: string = '';
   @State private toastShow: boolean = false;
@@ -46,7 +54,67 @@ export struct PasswordView {
     return this.passwords.filter((e: PasswordEntry) => entryInDomain(e, this.openDomain));
   }
 
-  private beginEdit(e: PasswordEntry): void {}
+  private beginAdd(): void {
+    this.formId = '';
+    this.fName = '';
+    this.fUrl = this.openDomain ? 'https://' + this.openDomain : '';
+    this.fUser = '';
+    this.fPass = '';
+    this.fNote = '';
+    this.formOpen = true;
+  }
+
+  private beginEdit(e: PasswordEntry): void {
+    this.formId = e.id;
+    this.fName = e.name;
+    this.fUrl = e.url;
+    this.fUser = e.username;
+    this.fPass = e.password;
+    this.fNote = e.note;
+    this.formOpen = true;
+  }
+
+  private submitForm(): void {
+    const url: string = this.fUrl.trim();
+    const user: string = this.fUser.trim();
+    const pass: string = this.fPass;
+    if (!url && !user && !pass) { this.tip('请至少填写一项'); return; }
+    if (this.formId === '') {
+      if (!this.isMember && this.passwords.length >= FREE_PASSWORD_LIMIT) {
+        this.tip(`免费用户最多保存 ${FREE_PASSWORD_LIMIT} 条密码`);
+        return;
+      }
+      const entry: PasswordEntry = {
+        id: Date.now().toString(),
+        name: this.fName.trim() || extractDomain(url) || url || user,
+        url: url, username: user, password: pass, note: this.fNote.trim(),
+        timestamp: new Date().toISOString(),
+      };
+      const next: PasswordEntry[] = this.passwords.concat([entry]);
+      this.passwords = next;
+      this.onChange(next);
+      this.tip('已保存');
+    } else {
+      const id: string = this.formId;
+      const next: PasswordEntry[] = this.passwords.map((x: PasswordEntry): PasswordEntry => {
+        if (x.id !== id) return x;
+        const updated: PasswordEntry = {
+          id: x.id,
+          name: this.fName.trim() || extractDomain(url) || url || user,
+          url: url, username: user, password: pass, note: this.fNote.trim(),
+          timestamp: new Date().toISOString(),
+        };
+        return updated;
+      });
+      this.passwords = next;
+      this.onChange(next);
+      this.tip('已更新');
+    }
+    this.formOpen = false;
+    if (this.openDomain !== '' && extractDomain(url) !== this.openDomain) {
+      this.openDomain = '';
+    }
+  }
 
   private removeEntry(e: PasswordEntry): void {
     const next: PasswordEntry[] = this.passwords.filter((x: PasswordEntry) => x.id !== e.id);
@@ -122,6 +190,55 @@ export struct PasswordView {
     .onClick(() => { this.removeEntry(e); })
   }
 
+  @Builder
+  formField(label: string, value: string, onCh: (v: string) => void, isPass: boolean) {
+    Column({ space: 6 }) {
+      Text(label).fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+      TextInput({ text: value, placeholder: '' })
+        .type(isPass ? InputType.Password : InputType.Normal)
+        .onChange(onCh)
+        .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+        .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
+        .height(44).padding({ left: 14, right: 14 })
+    }.alignItems(HorizontalAlign.Start).width('100%')
+  }
+
+  @Builder
+  formOverlay() {
+    Column() {
+      Row() {
+        Button({ type: ButtonType.Normal }) {
+          Text('×').fontSize(20).fontColor(this.c('rgba(238,238,245,0.75)', '#5C4F43'))
+        }
+        .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.06)')).borderRadius(11).width(36).height(36)
+        .onClick(() => { this.formOpen = false; })
+        Text(this.formId === '' ? '新增密码' : '编辑密码')
+          .fontSize(17).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
+        Text('').width(36).height(36)
+      }
+      .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 8 })
+      .justifyContent(FlexAlign.SpaceBetween).alignItems(VerticalAlign.Center)
+
+      Scroll() {
+        Column({ space: 14 }) {
+          this.formField('名称', this.fName, (v: string) => { this.fName = v; }, false)
+          this.formField('站点 URL', this.fUrl, (v: string) => { this.fUrl = v; }, false)
+          this.formField('用户名', this.fUser, (v: string) => { this.fUser = v; }, false)
+          this.formField('密码', this.fPass, (v: string) => { this.fPass = v; }, true)
+          this.formField('备注', this.fNote, (v: string) => { this.fNote = v; }, false)
+          Button('保存')
+            .width('100%').height(50).borderRadius(15)
+            .backgroundColor(this.accentColor).fontColor('#fff').fontSize(15).fontWeight(650)
+            .onClick(() => { this.submitForm(); })
+        }
+        .padding({ left: 20, right: 20, top: 8, bottom: 40 })
+      }.scrollBar(BarState.Off).layoutWeight(1)
+    }
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
+    .padding({ top: 44 })
+    .position({ x: 0, y: 0 }).zIndex(500)
+  }
+
   build() {
     Stack() {
       Column() {
@@ -147,6 +264,18 @@ export struct PasswordView {
         .border({ width: 1, color: this.accentColor + '55' })
         .alignItems(VerticalAlign.Center)
 
+        if (this.openDomain === '') {
+          Row({ space: 16 }) {
+            Text('+ 添加').fontSize(13).fontColor(this.accentColor)
+              .onClick(() => { this.beginAdd(); })
+            Text('导入 CSV').fontSize(13).fontColor(this.accentColor)
+              .onClick(() => { this.onImport(); })
+            Text('导出 CSV').fontSize(13).fontColor(this.accentColor)
+              .onClick(() => { this.onExport(); })
+          }
+          .width('100%').padding({ left: 20, right: 20, bottom: 6 }).justifyContent(FlexAlign.Start)
+        }
+
         if (this.openDomain !== '') {
           // 详情头
           Row({ space: 8 }) {
@@ -155,7 +284,8 @@ export struct PasswordView {
             Text(this.domainLabel(this.openDomain))
               .fontSize(16).fontWeight(700).fontColor(this.c('#eeeef5', '#2C1810')).flexGrow(1)
               .textAlign(TextAlign.Center)
-            Text('').width(44)
+            Text('+ 添加').fontSize(14).fontColor(this.accentColor)
+              .onClick(() => { this.beginAdd(); })
           }
           .width('100%').padding({ left: 16, right: 16, top: 4, bottom: 8 }).alignItems(VerticalAlign.Center)
 
@@ -206,6 +336,8 @@ export struct PasswordView {
       }
       .width('100%').height('100%')
       .backgroundColor(this.c('#0d0d12', '#FAF7F2'))
+
+      if (this.formOpen) { this.formOverlay() }
 
       if (this.toastShow) {
         Text(this.toastMsg)
