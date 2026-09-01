@@ -430,10 +430,10 @@ export struct PasswordView {
 
       if (this.toastShow) {
         Text(this.toastMsg)
-          .fontSize(13).fontColor('#f0f0f5')
-          .padding({ left: 18, right: 18, top: 8, bottom: 8 })
+          .fontSize(14).fontColor('#f0f0f5')
+          .padding({ left: 20, right: 20, top: 10, bottom: 10 })
           .backgroundColor('rgba(22,22,30,0.96)').borderRadius(20)
-          .position({ x: '50%', y: '90%' }).translate({ x: '-50%', y: 0 })
+          .position({ x: '50%', y: '50%' }).translate({ x: '-50%', y: '-50%' })
           .zIndex(600)
       }
     }
