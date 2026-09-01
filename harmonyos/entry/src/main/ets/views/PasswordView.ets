@@ -295,6 +295,35 @@ export struct PasswordView {
     .position({ x: 0, y: 0 }).zIndex(500)
   }
 
+  // 详情作为叠加层（而非替换分组列表），使分组列表不被卸载、返回时保留滚动位置
+  @Builder
+  detailView() {
+    Column() {
+      Row({ space: 8 }) {
+        Text('‹ 返回').fontSize(14).fontColor(this.accentColor)
+          .onClick(() => { this.openDomain = ''; this.revealId = ''; })
+        Text(this.domainLabel(this.openDomain))
+          .fontSize(16).fontWeight(700).fontColor(this.c('#eeeef5', '#2C1810')).flexGrow(1)
+          .textAlign(TextAlign.Center)
+        Text('+ 添加').fontSize(14).fontColor(this.accentColor)
+          .onClick(() => { this.beginAdd(); })
+      }
+      .width('100%').padding({ left: 16, right: 16, top: 4, bottom: 8 }).alignItems(VerticalAlign.Center)
+
+      List({ space: 10 }) {
+        ForEach(this.currentEntries(), (e: PasswordEntry) => {
+          ListItem() { this.entryCard(e) }
+          .swipeAction({ end: () => { this.deleteAction(e) } })
+        }, (e: PasswordEntry) => e.id + '_' + e.name + '_' + e.username + '_' + e.password)
+        ListItem() { Column().height(96) }
+      }
+      .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
+    }
+    .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
+    .padding({ top: 44 })
+    .position({ x: 0, y: 0 }).zIndex(400)
+  }
+
   build() {
     Stack() {
       Column() {
@@ -354,27 +383,6 @@ export struct PasswordView {
             ListItem() { Column().height(96) }
           }
           .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
-        } else if (this.openDomain !== '') {
-          // 详情头
-          Row({ space: 8 }) {
-            Text('‹ 返回').fontSize(14).fontColor(this.accentColor)
-              .onClick(() => { this.openDomain = ''; this.revealId = ''; })
-            Text(this.domainLabel(this.openDomain))
-              .fontSize(16).fontWeight(700).fontColor(this.c('#eeeef5', '#2C1810')).flexGrow(1)
-              .textAlign(TextAlign.Center)
-            Text('+ 添加').fontSize(14).fontColor(this.accentColor)
-              .onClick(() => { this.beginAdd(); })
-          }
-          .width('100%').padding({ left: 16, right: 16, top: 4, bottom: 8 }).alignItems(VerticalAlign.Center)
-
-          List({ space: 10 }) {
-            ForEach(this.currentEntries(), (e: PasswordEntry) => {
-              ListItem() { this.entryCard(e) }
-              .swipeAction({ end: () => { this.deleteAction(e) } })
-            }, (e: PasswordEntry) => e.id + '_' + e.name + '_' + e.username + '_' + e.password)
-            ListItem() { Column().height(96) }
-          }
-          .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
         } else {
           // 域名分组列表
           List({ space: 0 }) {
@@ -414,6 +422,8 @@ export struct PasswordView {
       }
       .width('100%').height('100%')
       .backgroundColor(this.c('#0d0d12', '#FAF7F2'))
+
+      if (this.openDomain !== '') { this.detailView() }
 
       if (this.formOpen) { this.formOverlay() }
 
