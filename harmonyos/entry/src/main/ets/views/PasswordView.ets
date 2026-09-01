@@ -152,40 +152,64 @@ export struct PasswordView {
   aboutToDisappear(): void { clearTimeout(this.toastTimer); }
 
   @Builder
+  cardDivider() {
+    Divider().color(this.c('rgba(255,255,255,0.08)', '#E8E2D9')).strokeWidth(1)
+  }
+
+  @Builder
   entryCard(e: PasswordEntry) {
-    Column({ space: 8 }) {
-      Text(e.name || e.url || '(未命名)')
-        .fontSize(14).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810')).width('100%')
-      if (e.url) {
-        Text(e.url).fontSize(11).fontColor(this.c('rgba(238,238,245,0.5)', '#9B8B80'))
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-      }
-      Row({ space: 6 }) {
-        Text('账号').fontSize(11).fontColor(this.c('rgba(238,238,245,0.45)', '#9B8B80')).width(40)
-        Text(e.username || '—').fontSize(13).fontColor(this.c('#eeeef5', '#2C1810')).flexGrow(1)
+    Column({ space: 14 }) {
+      // 标题行 —— 编辑图标在右上角，与标题同行
+      Row({ space: 8 }) {
+        Column({ space: 3 }) {
+          Text(e.name || e.url || '(未命名)')
+            .fontSize(16).fontWeight(600).fontColor(this.c('#eeeef5', '#2C1810')).width('100%')
+          if (e.url) {
+            Text(e.url).fontSize(12).fontColor(this.c('rgba(238,238,245,0.5)', '#9B8B80'))
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+          }
+        }.alignItems(HorizontalAlign.Start).flexGrow(1)
+        Button({ type: ButtonType.Normal }) {
+          Image($r('app.media.icon_edit'))
+            .width(17).height(17).fillColor(this.accentColor)
+        }
+        .width(32).height(32).borderRadius(9)
+        .backgroundColor(this.c('rgba(255,255,255,0.06)', 'rgba(0,0,0,0.04)'))
+        .onClick(() => { this.beginEdit(e); })
+      }.width('100%').alignItems(VerticalAlign.Top)
+
+      this.cardDivider()
+
+      // 账号行 —— 长按复制
+      Row({ space: 10 }) {
+        Text('账号').fontSize(13).fontColor(this.c('rgba(238,238,245,0.45)', '#9B8B80')).width(44)
+        Text(e.username || '—').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).flexGrow(1)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text('复制').fontSize(12).fontColor(this.accentColor)
-          .onClick(() => { this.copy(e.username, '账号'); })
-      }.width('100%').alignItems(VerticalAlign.Center)
-      Row({ space: 6 }) {
-        Text('密码').fontSize(11).fontColor(this.c('rgba(238,238,245,0.45)', '#9B8B80')).width(40)
+      }
+      .width('100%').alignItems(VerticalAlign.Center)
+      .gesture(LongPressGesture().onAction(() => { this.copy(e.username, '账号'); }))
+
+      this.cardDivider()
+
+      // 密码行 —— 长按复制，眼睛图标切换显隐
+      Row({ space: 10 }) {
+        Text('密码').fontSize(13).fontColor(this.c('rgba(238,238,245,0.45)', '#9B8B80')).width(44)
         Text(this.revealId === e.id ? (e.password || '—') : '••••••••')
-          .fontSize(13).fontFamily('monospace').fontColor(this.c('#eeeef5', '#2C1810')).flexGrow(1)
+          .fontSize(15).fontFamily('monospace').fontColor(this.c('#eeeef5', '#2C1810')).flexGrow(1)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.revealId === e.id ? '隐藏' : '显示').fontSize(12).fontColor(this.accentColor)
+        SymbolGlyph(this.revealId === e.id ? $r('sys.symbol.eye_slash') : $r('sys.symbol.eye'))
+          .fontSize(18).fontColor([this.accentColor])
           .onClick(() => { this.revealId = this.revealId === e.id ? '' : e.id; })
-        Text('复制').fontSize(12).fontColor(this.accentColor)
-          .onClick(() => { this.copy(e.password, '密码'); })
-      }.width('100%').alignItems(VerticalAlign.Center)
-      if (e.note) {
-        Text(e.note).fontSize(11).fontColor(this.c('rgba(238,238,245,0.5)', '#6B5B50')).width('100%')
       }
-      Row() {
-        Text('编辑').fontSize(12).fontColor(this.c('rgba(238,238,245,0.6)', '#6B5B50'))
-          .onClick(() => { this.beginEdit(e); })
-      }.width('100%').justifyContent(FlexAlign.End)
+      .width('100%').alignItems(VerticalAlign.Center)
+      .gesture(LongPressGesture().onAction(() => { this.copy(e.password, '密码'); }))
+
+      if (e.note) {
+        this.cardDivider()
+        Text(e.note).fontSize(13).fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50')).width('100%')
+      }
     }
-    .width('100%').padding(14)
+    .width('100%').padding(16)
     .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(14)
     .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
   }
@@ -218,7 +242,7 @@ export struct PasswordView {
       Row({ space: 12 }) {
         Text('密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).flexGrow(1)
         Text('生成').fontSize(12).fontColor(this.accentColor)
-          .onClick(() => { this.fPass = generatePassword(); this.fPassShow = true; })
+          .onClick(() => { this.fPass = generatePassword(); this.fPassShow = true; this.tip('已生成强密码'); })
         if (this.fPass.length > 0) {
           Text(this.fPassShow ? '隐藏' : '显示').fontSize(12).fontColor(this.accentColor)
             .onClick(() => { this.fPassShow = !this.fPassShow; })
@@ -297,7 +321,7 @@ export struct PasswordView {
           .border({ width: 1, color: this.accentColor + '55' })
           .alignItems(VerticalAlign.Center)
 
-          if (this.openDomain === '') {
+          if (this.openDomain === '' && this.query.length === 0) {
             Button({ type: ButtonType.Normal }) {
               Image($r('app.media.icon_add'))
                 .width(20).height(20).fillColor(this.accentColor)
@@ -399,6 +423,7 @@ export struct PasswordView {
           .padding({ left: 18, right: 18, top: 8, bottom: 8 })
           .backgroundColor('rgba(22,22,30,0.96)').borderRadius(20)
           .position({ x: '50%', y: '90%' }).translate({ x: '-50%', y: 0 })
+          .zIndex(600)
       }
     }
     .width('100%').height('100%')
