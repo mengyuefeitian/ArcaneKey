@@ -13,8 +13,6 @@ export struct PasswordView {
   @Link passwords: PasswordEntry[];
   @Link openDomain: string;
   onChange: (list: PasswordEntry[]) => void = () => {};
-  onImport: () => void = () => {};
-  onExport: () => void = () => {};
   onNavHide: () => void = () => {};
   onNavShow: () => void = () => {};
 
@@ -213,7 +211,8 @@ export struct PasswordView {
   @Builder
   formOverlay() {
     Column() {
-      Row() {
+      // Header — 左对齐，与设置页备份/导入弹窗一致
+      Row({ space: 12 }) {
         Button({ type: ButtonType.Normal }) {
           Text('×').fontSize(20).fontColor(this.c('rgba(238,238,245,0.75)', '#5C4F43'))
         }
@@ -221,25 +220,24 @@ export struct PasswordView {
         .onClick(() => { this.formOpen = false; this.onNavShow(); })
         Text(this.formId === '' ? '新增密码' : '编辑密码')
           .fontSize(17).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
-        Text('').width(36).height(36)
       }
-      .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 8 })
-      .justifyContent(FlexAlign.SpaceBetween).alignItems(VerticalAlign.Center)
+      .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 0 })
+      .alignItems(VerticalAlign.Center)
 
-      Scroll() {
-        Column({ space: 14 }) {
-          this.formField('名称', this.fName, (v: string) => { this.fName = v; }, false)
-          this.formField('站点 URL', this.fUrl, (v: string) => { this.fUrl = v; }, false)
-          this.formField('用户名', this.fUser, (v: string) => { this.fUser = v; }, false)
-          this.formField('密码', this.fPass, (v: string) => { this.fPass = v; }, true)
-          this.formField('备注', this.fNote, (v: string) => { this.fNote = v; }, false)
-          Button('保存')
-            .width('100%').height(50).borderRadius(15)
-            .backgroundColor(this.accentColor).fontColor('#fff').fontSize(15).fontWeight(650)
-            .onClick(() => { this.submitForm(); })
-        }
-        .padding({ left: 20, right: 20, top: 8, bottom: 40 })
-      }.scrollBar(BarState.Off).layoutWeight(1)
+      Column({ space: 14 }) {
+        this.formField('名称', this.fName, (v: string) => { this.fName = v; }, false)
+        this.formField('站点 URL', this.fUrl, (v: string) => { this.fUrl = v; }, false)
+        this.formField('用户名', this.fUser, (v: string) => { this.fUser = v; }, false)
+        this.formField('密码', this.fPass, (v: string) => { this.fPass = v; }, true)
+        this.formField('备注', this.fNote, (v: string) => { this.fNote = v; }, false)
+        Button('保存')
+          .width('100%').height(50).borderRadius(15)
+          .backgroundColor(this.accentColor).fontColor('#fff').fontSize(15).fontWeight(650)
+          .margin({ top: 'auto' })
+          .onClick(() => { this.submitForm(); })
+      }
+      .width('100%').flexGrow(1)
+      .padding({ left: 20, right: 20, top: 16, bottom: 20 })
     }
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
     .padding({ top: 44 })
@@ -275,10 +273,6 @@ export struct PasswordView {
           Row({ space: 16 }) {
             Text('+ 添加').fontSize(13).fontColor(this.accentColor)
               .onClick(() => { this.beginAdd(); })
-            Text('导入 CSV').fontSize(13).fontColor(this.accentColor)
-              .onClick(() => { this.onImport(); })
-            Text('导出 CSV').fontSize(13).fontColor(this.accentColor)
-              .onClick(() => { this.onExport(); })
           }
           .width('100%').padding({ left: 20, right: 20, bottom: 6 }).justifyContent(FlexAlign.Start)
         }
@@ -331,7 +325,7 @@ export struct PasswordView {
               ListItem() {
                 Column({ space: 12 }) {
                   Text('🔐').fontSize(36)
-                  Text('暂无密码\n点右上角 + 添加，或导入 CSV')
+                  Text('暂无密码\n点上方 + 添加，或在设置里导入')
                     .fontSize(14).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50')).textAlign(TextAlign.Center)
                 }
                 .width('100%').padding({ top: 70, bottom: 70 }).justifyContent(FlexAlign.Center)

@@ -15,6 +15,8 @@ export struct ProfileView {
   onLogout: () => void = () => {};
   onBackupTap: () => void = () => {};
   onImportTap: () => void = () => {};
+  onPwBackupTap: () => void = () => {};
+  onPwImportTap: () => void = () => {};
   onThemeTap: () => void = () => {};
   onAccountTap: () => void = () => {};
   onMembershipTap: () => void = () => {};
@@ -168,8 +170,57 @@ export struct ProfileView {
             .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
             .opacity(this.loggedIn ? 1 : 0.65)
             .onClick(() => { if (this.loggedIn) this.onImportTap(); })
+          }
+        }
+        .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(18)
+        .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
+
+        // Password data (独立版块)
+        Column() {
+          // 密码备份
+          Column() {
+            Row({ space: 0 }) {
+              Stack() { Text('🔑').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
+              Column({ space: 2 }) {
+                Text('密码备份').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
+                Text(this.isMember ? '导出密码为 CSV 到本地' : '会员专属')
+                  .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+              }.alignItems(HorizontalAlign.Start).flexGrow(1)
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+            }
+            .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+            .opacity(this.loggedIn ? 1 : 0.65)
+            .onClick(() => { if (this.loggedIn) this.onPwBackupTap(); })
             Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
           }
+          // 密码导入
+          Column() {
+            Row({ space: 0 }) {
+              Stack() { Text('🗝️').fontSize(16) }
+                .width(34).height(34).borderRadius(10)
+                .backgroundColor(this.accentColor + '28')
+                .margin({ right: 14 })
+              Column({ space: 2 }) {
+                Text('密码导入').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
+                Text(this.isMember ? '从浏览器 CSV 导入密码' : '会员专属')
+                  .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+              }.alignItems(HorizontalAlign.Start).flexGrow(1)
+              Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
+            }
+            .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+            .opacity(this.loggedIn ? 1 : 0.65)
+            .onClick(() => { if (this.loggedIn) this.onPwImportTap(); })
+          }
+        }
+        .margin({ top: 20 })
+        .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(18)
+        .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
+
+        // Menu (下半段)
+        Column() {
           // Theme
           Column() {
             Row({ space: 0 }) {
@@ -272,6 +323,7 @@ export struct ProfileView {
             .onClick(() => this.onAboutTap())
           }
         }
+        .margin({ top: 20 })
         .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(18)
         .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
 

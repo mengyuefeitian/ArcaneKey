@@ -2237,6 +2237,8 @@ struct Index {
               if (!this.isMember) { this.toast('导入功能需要开通会员'); this.showMembership = true; return; }
               this.importPw = ''; this.importText = ''; this.showImport = true;
             },
+            onPwBackupTap: () => { this.exportPasswordsCsv(); },
+            onPwImportTap: () => { this.importPasswordsCsv(); },
             onThemeTap: () => { this.showTheme = true; },
             onAccountTap: () => { this.showAccountInfo = true; },
             onMembershipTap: () => { this.showMembership = true; },
@@ -2274,8 +2276,6 @@ struct Index {
             formOpen: $pwFormOpen,
             // 仅持久化。PasswordView 通过 $passwords（@Link）已就地写回，单一写路径。
             onChange: (list: PasswordEntry[]) => { savePasswords(list); },
-            onImport: () => { this.importPasswordsCsv(); },
-            onExport: () => { this.exportPasswordsCsv(); },
             onNavHide: () => { this.navVisible = false; },
             onNavShow: () => { this.navVisible = true; },
           })
