@@ -56,7 +56,7 @@ export struct HomeView {
           SymbolGlyph($r('sys.symbol.magnifyingglass'))
             .fontColor([this.c('rgba(238,238,245,0.55)', '#5C4F43')])
             .fontSize(18)
-          TextInput({ text: this.searchQ, placeholder: '搜索品牌或账号' })
+          TextInput({ text: $$this.searchQ, placeholder: '搜索品牌或账号' })
             .id('home_search_input')
             .flexGrow(1)
             .backgroundColor(Color.Transparent)
@@ -68,14 +68,14 @@ export struct HomeView {
             .onChange((v: string) => { this.searchQ = v; })
           if (this.searchQ.length > 0) {
             Text('×')
-              .fontSize(16).fontWeight(500).fontColor(this.c('rgba(238,238,245,0.5)', '#5C4F43'))
-              .width(20).height(20)
+              .fontSize(18).fontWeight(500).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43'))
+              .width(24).height(24)
               .textAlign(TextAlign.Center)
               .onClick(() => { this.searchQ = ''; })
           }
         }
         .height(36)
-        .padding({ left: 16, right: 16, top: 6, bottom: 6 })
+        .padding({ left: 16, right: 12, top: 6, bottom: 6 })
         .margin({ left: 16, right: 16, top: 8, bottom: 8 })
         .backgroundColor(this.c('#191920', '#FFFFFF'))
         .borderRadius(10)
