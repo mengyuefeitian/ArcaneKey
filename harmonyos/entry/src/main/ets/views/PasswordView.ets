@@ -3,6 +3,7 @@ import { extractDomain } from '../utils/DomainUtil';
 import { FREE_PASSWORD_LIMIT } from '../model/Token';
 import { Logo } from '../components/Logo';
 import { pasteboard } from '@kit.BasicServicesKit';
+import { generatePassword } from '../utils/PasswordGen';
 
 @Component
 export struct PasswordView {
@@ -24,6 +25,7 @@ export struct PasswordView {
   @State private fUrl: string = '';
   @State private fUser: string = '';
   @State private fPass: string = '';
+  @State private fPassShow: boolean = false;
   @State private fNote: string = '';
   @State private revealId: string = '';
   @State private toastMsg: string = '';
@@ -70,6 +72,7 @@ export struct PasswordView {
     this.fUrl = (this.openDomain && this.openDomain !== OTHER_DOMAIN) ? 'https://' + this.openDomain : '';
     this.fUser = '';
     this.fPass = '';
+    this.fPassShow = false;
     this.fNote = '';
     this.formOpen = true;
     this.onNavHide();
@@ -81,6 +84,7 @@ export struct PasswordView {
     this.fUrl = e.url;
     this.fUser = e.username;
     this.fPass = e.password;
+    this.fPassShow = false;
     this.fNote = e.note;
     this.formOpen = true;
     this.onNavHide();
@@ -209,6 +213,29 @@ export struct PasswordView {
   }
 
   @Builder
+  pwField() {
+    Column({ space: 6 }) {
+      Row({ space: 12 }) {
+        Text('密码').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50')).flexGrow(1)
+        Text('生成').fontSize(12).fontColor(this.accentColor)
+          .onClick(() => { this.fPass = generatePassword(); this.fPassShow = true; })
+        if (this.fPass.length > 0) {
+          Text(this.fPassShow ? '隐藏' : '显示').fontSize(12).fontColor(this.accentColor)
+            .onClick(() => { this.fPassShow = !this.fPassShow; })
+          Text('复制').fontSize(12).fontColor(this.accentColor)
+            .onClick(() => { this.copy(this.fPass, '密码'); })
+        }
+      }.width('100%').alignItems(VerticalAlign.Center)
+      TextInput({ text: this.fPass, placeholder: '' })
+        .type(this.fPassShow ? InputType.Normal : InputType.Password)
+        .onChange((v: string) => { this.fPass = v; })
+        .backgroundColor(this.c('#191920', '#FFFFFF')).fontColor(this.c('#eeeef5', '#2C1810'))
+        .border({ width: 1, color: this.c('rgba(255,255,255,0.08)', '#E8E2D9') }).borderRadius(12)
+        .height(44).padding({ left: 14, right: 14 })
+    }.alignItems(HorizontalAlign.Start).width('100%')
+  }
+
+  @Builder
   formOverlay() {
     Column() {
       // Header — 左对齐，与设置页备份/导入弹窗一致
@@ -228,7 +255,7 @@ export struct PasswordView {
         this.formField('名称', this.fName, (v: string) => { this.fName = v; }, false)
         this.formField('站点 URL', this.fUrl, (v: string) => { this.fUrl = v; }, false)
         this.formField('用户名', this.fUser, (v: string) => { this.fUser = v; }, false)
-        this.formField('密码', this.fPass, (v: string) => { this.fPass = v; }, true)
+        this.pwField()
         this.formField('备注', this.fNote, (v: string) => { this.fNote = v; }, false)
         Button('保存')
           .width('100%').height(50).borderRadius(15)
@@ -247,35 +274,41 @@ export struct PasswordView {
   build() {
     Stack() {
       Column() {
-        // 顶部常驻搜索框
-        Row({ space: 6 }) {
-          SymbolGlyph($r('sys.symbol.magnifyingglass'))
-            .fontColor([this.c('rgba(238,238,245,0.55)', '#5C4F43')]).fontSize(18)
-          TextInput({ text: this.query, placeholder: '搜索域名、站点或用户名' })
-            .flexGrow(1).backgroundColor(Color.Transparent)
-            .fontColor(this.c('#eeeef5', '#2C1810'))
-            .placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
-            .fontSize(13).height(28).padding(0)
-            .onChange((v: string) => { this.query = v; })
-          if (this.query.length > 0) {
-            Text('×').fontSize(16).fontColor(this.c('rgba(238,238,245,0.5)', '#5C4F43'))
-              .width(20).height(20).textAlign(TextAlign.Center)
-              .onClick(() => { this.query = ''; })
+        // 顶部常驻搜索框（Level 0 时右侧带图标式添加）
+        Row({ space: 8 }) {
+          Row({ space: 6 }) {
+            SymbolGlyph($r('sys.symbol.magnifyingglass'))
+              .fontColor([this.c('rgba(238,238,245,0.55)', '#5C4F43')]).fontSize(18)
+            TextInput({ text: this.query, placeholder: '搜索域名、站点或用户名' })
+              .flexGrow(1).backgroundColor(Color.Transparent)
+              .fontColor(this.c('#eeeef5', '#2C1810'))
+              .placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
+              .fontSize(13).height(28).padding(0)
+              .onChange((v: string) => { this.query = v; })
+            if (this.query.length > 0) {
+              Text('×').fontSize(16).fontColor(this.c('rgba(238,238,245,0.5)', '#5C4F43'))
+                .width(20).height(20).textAlign(TextAlign.Center)
+                .onClick(() => { this.query = ''; })
+            }
           }
-        }
-        .height(36).padding({ left: 16, right: 16, top: 6, bottom: 6 })
-        .margin({ left: 16, right: 16, top: 8, bottom: 8 })
-        .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(10)
-        .border({ width: 1, color: this.accentColor + '55' })
-        .alignItems(VerticalAlign.Center)
+          .layoutWeight(1)
+          .height(36).padding({ left: 16, right: 16, top: 6, bottom: 6 })
+          .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(10)
+          .border({ width: 1, color: this.accentColor + '55' })
+          .alignItems(VerticalAlign.Center)
 
-        if (this.openDomain === '' && this.query.trim() === '') {
-          Row({ space: 16 }) {
-            Text('+ 添加').fontSize(13).fontColor(this.accentColor)
-              .onClick(() => { this.beginAdd(); })
+          if (this.openDomain === '') {
+            Button({ type: ButtonType.Normal }) {
+              Image($r('app.media.icon_add'))
+                .width(20).height(20).fillColor(this.accentColor)
+            }
+            .width(36).height(36).borderRadius(10)
+            .backgroundColor(this.c('rgba(255,255,255,0.06)', 'rgba(0,0,0,0.04)'))
+            .onClick(() => { this.beginAdd(); })
           }
-          .width('100%').padding({ left: 20, right: 20, bottom: 6 }).justifyContent(FlexAlign.Start)
         }
+        .margin({ left: 16, right: 16, top: 8, bottom: 8 })
+        .alignItems(VerticalAlign.Center)
 
         if (this.query.trim() !== '') {
           // 全局扁平搜索结果

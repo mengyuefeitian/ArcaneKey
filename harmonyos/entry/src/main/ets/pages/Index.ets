@@ -149,7 +149,6 @@ struct Index {
   @State passwords: PasswordEntry[] = [];
   @State pwOpenDomain: string = '';
   @State pwFormOpen: boolean = false;
-  @State passwordTabUnlocked: boolean = false;
 
   // ── Toast ───────────────────────────────────────────────────────
   @State toastMsg: string = '';
@@ -211,13 +210,9 @@ struct Index {
     if (this.searchQ) {
       this.searchQ = '';
     }
-    this.passwordTabUnlocked = false;
     this.pwOpenDomain = '';
     this.pwFormOpen = false;
     this.navVisible = true;
-    if (this.currentTab === 3) {
-      this.currentTab = 0;
-    }
   }
 
   private async runSecurityUnlock(): Promise<void> {
@@ -737,14 +732,9 @@ struct Index {
     } catch (_) { this.toast('复制失败'); }
   }
 
-  private async goPasswordTab(): Promise<void> {
-    if (this.securityMode !== 'off' && this.loggedIn && !this.passwordTabUnlocked) {
-      try {
-        const outcome: AuthOutcome = await authenticateSecurity(this.securityMode);
-        if (!outcome.ok) { this.toast('验证失败'); return; }
-      } catch (_) { this.toast('验证失败'); return; }
-      this.passwordTabUnlocked = true;
-    }
+  // 密码 Tab 与口令一样是普通 Tab：App 启动时的应用锁（securityLocked 全屏遮罩）
+  // 已覆盖整个应用，无需在此单独二次验证。
+  private goPasswordTab(): void {
     this.currentTab = 3;
     this.navVisible = true;
   }
@@ -1721,8 +1711,18 @@ struct Index {
           .fontColor(this.backupPw && this.backupPw === this.backupPw2 ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doBackup())
+
+        Divider().color(this.c('rgba(255,255,255,0.08)', '#E8E2D9')).strokeWidth(1)
+        Column({ space: 8 }) {
+          Text('密码数据').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          Button('导出密码为 CSV')
+            .width('100%').height(44).borderRadius(12)
+            .backgroundColor(this.accentColor + '22').fontColor(this.accentColor)
+            .fontSize(14).fontWeight(600)
+            .onClick(() => this.exportPasswordsCsv())
+        }.alignItems(HorizontalAlign.Start).width('100%')
       }
-      .padding({ left: 20, right: 20, top: 16 })
+      .padding({ left: 20, right: 20, top: 16, bottom: 20 })
       .flexGrow(1)
     }
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
@@ -1770,8 +1770,18 @@ struct Index {
           .fontColor(this.importText ? '#fff' : this.c('rgba(238,238,245,0.60)', '#6B5B50'))
           .fontSize(15).fontWeight(650).margin({ top: 'auto' })
           .onClick(() => this.doImport())
+
+        Divider().color(this.c('rgba(255,255,255,0.08)', '#E8E2D9')).strokeWidth(1)
+        Column({ space: 8 }) {
+          Text('密码数据').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+          Button('导入密码 CSV')
+            .width('100%').height(44).borderRadius(12)
+            .backgroundColor(this.accentColor + '22').fontColor(this.accentColor)
+            .fontSize(14).fontWeight(600)
+            .onClick(() => this.importPasswordsCsv())
+        }.alignItems(HorizontalAlign.Start).width('100%')
       }
-      .padding({ left: 20, right: 20, top: 16 })
+      .padding({ left: 20, right: 20, top: 16, bottom: 20 })
       .flexGrow(1)
     }
     .width('100%').height('100%').backgroundColor(this.c('#0d0d12', '#FAF7F2'))
@@ -2237,8 +2247,6 @@ struct Index {
               if (!this.isMember) { this.toast('导入功能需要开通会员'); this.showMembership = true; return; }
               this.importPw = ''; this.importText = ''; this.showImport = true;
             },
-            onPwBackupTap: () => { this.exportPasswordsCsv(); },
-            onPwImportTap: () => { this.importPasswordsCsv(); },
             onThemeTap: () => { this.showTheme = true; },
             onAccountTap: () => { this.showAccountInfo = true; },
             onMembershipTap: () => { this.showMembership = true; },
