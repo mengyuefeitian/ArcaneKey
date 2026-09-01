@@ -187,7 +187,7 @@ export struct PasswordView {
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }
       .width('100%').alignItems(VerticalAlign.Center)
-      .gesture(LongPressGesture().onAction(() => { this.copy(e.username, '账号'); }))
+      .priorityGesture(LongPressGesture().onAction((event: GestureEvent) => { this.copy(e.username, '账号'); }))
 
       this.cardDivider()
 
@@ -202,7 +202,7 @@ export struct PasswordView {
           .onClick(() => { this.revealId = this.revealId === e.id ? '' : e.id; })
       }
       .width('100%').alignItems(VerticalAlign.Center)
-      .gesture(LongPressGesture().onAction(() => { this.copy(e.password, '密码'); }))
+      .priorityGesture(LongPressGesture().onAction((event: GestureEvent) => { this.copy(e.password, '密码'); }))
 
       if (e.note) {
         this.cardDivider()
@@ -327,7 +327,7 @@ export struct PasswordView {
   build() {
     Stack() {
       Column() {
-        // 顶部常驻搜索框（Level 0 时右侧带图标式添加）
+        // 顶部常驻搜索框 + 独立的清空 / 添加按钮
         Row({ space: 8 }) {
           Row({ space: 6 }) {
             SymbolGlyph($r('sys.symbol.magnifyingglass'))
@@ -338,11 +338,6 @@ export struct PasswordView {
               .placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
               .fontSize(13).height(28).padding(0)
               .onChange((v: string) => { this.query = v; })
-            if (this.query.length > 0) {
-              Text('×').fontSize(16).fontColor(this.c('rgba(238,238,245,0.5)', '#5C4F43'))
-                .width(20).height(20).textAlign(TextAlign.Center)
-                .onClick(() => { this.query = ''; })
-            }
           }
           .layoutWeight(1)
           .height(36).padding({ left: 16, right: 16, top: 6, bottom: 6 })
@@ -350,7 +345,16 @@ export struct PasswordView {
           .border({ width: 1, color: this.accentColor + '55' })
           .alignItems(VerticalAlign.Center)
 
-          if (this.openDomain === '' && this.query.length === 0) {
+          if (this.query.length > 0) {
+            Button({ type: ButtonType.Normal }) {
+              Text('×').fontSize(18).fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43'))
+            }
+            .width(36).height(36).borderRadius(10)
+            .backgroundColor(this.c('rgba(255,255,255,0.06)', 'rgba(0,0,0,0.04)'))
+            .onClick(() => { this.query = ''; })
+          }
+
+          if (this.openDomain === '') {
             Button({ type: ButtonType.Normal }) {
               Image($r('app.media.icon_add'))
                 .width(20).height(20).fillColor(this.accentColor)
