@@ -333,19 +333,20 @@ export struct PasswordView {
             SymbolGlyph($r('sys.symbol.magnifyingglass'))
               .fontColor([this.c('rgba(238,238,245,0.55)', '#5C4F43')]).fontSize(18)
             TextInput({ text: $$this.query, placeholder: '搜索域名、站点或用户名' })
-              .flexGrow(1).backgroundColor(Color.Transparent)
+              .layoutWeight(1).backgroundColor(Color.Transparent)
               .fontColor(this.c('#eeeef5', '#2C1810'))
               .placeholderColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
               .fontSize(13).height(28).padding(0)
               .onChange((v: string) => { this.query = v; })
-            if (this.query.length > 0) {
-              Text('×').fontSize(18).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43'))
-                .width(24).height(24).textAlign(TextAlign.Center)
-                .onClick(() => { this.query = ''; })
-            }
+            // 始终占位的清空槽位，只切内容/可点性，避免条件插入导致的布局错乱
+            Text(this.query.length > 0 ? '×' : '')
+              .fontSize(18).fontColor(this.c('rgba(238,238,245,0.55)', '#5C4F43'))
+              .width(24).height(24).textAlign(TextAlign.Center)
+              .enabled(this.query.length > 0)
+              .onClick(() => { this.query = ''; })
           }
           .layoutWeight(1)
-          .height(36).padding({ left: 16, right: 12, top: 6, bottom: 6 })
+          .height(36).padding({ left: 16, right: 10, top: 6, bottom: 6 })
           .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(10)
           .border({ width: 1, color: this.accentColor + '55' })
           .alignItems(VerticalAlign.Center)
