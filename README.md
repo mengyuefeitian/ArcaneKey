@@ -48,7 +48,7 @@
 
 ## 隐私
 
-星枢令不会、也无法把你的密钥上传到任何服务器——详见 [隐私政策](https://mengyuefeitian.github.io/ArcaneKey/privacy.html)。
+星枢令不会、也无法把你的密钥上传到任何服务器——详见 [隐私政策](https://www.xiaoanhome.xyz/arcanekey/privacy-policy)。
 
 ## 许可证
 
