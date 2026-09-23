@@ -2,7 +2,7 @@
   "app": {
     "bundleName": "com.arcanekey.authenticator",
     "vendor": "arcanekey",
-    "versionCode": 1000340,
+    "versionCode": 1000342,
     "versionName": "3.1.0",
     "icon": "$media:app_icon",
     "label": "$string:app_name"
