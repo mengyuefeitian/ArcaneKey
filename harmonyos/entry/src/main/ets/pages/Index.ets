@@ -8,7 +8,7 @@ import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKEN_LIMIT, FREE_PASSWORD_LIMIT, MEMBERSHIP_PRICE, APP_NAME } from '../model/Token';
 import { BRAND_ICONS, BrandIconConfig } from '../model/BrandIcons';
-import { totp, timeLeft } from '../utils/TOTP';
+import { totp, timeLeft, currentPeriod } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled, loadOpenCount, saveOpenCount, loadPasswords, savePasswords } from '../utils/StorageUtil';
 import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
@@ -162,6 +162,8 @@ struct Index {
   @State showPrivacy: boolean = false;
 
   private timer: number = -1;
+  // TOTP window otpMap was built for; compared each tick so missed ticks (background freeze, timer drift) still refresh
+  private otpPeriod: number = -1;
   private toastTimer: number = -1;
   private cdTimer: number = -1;
   private autoSyncTimer: number = -1;
@@ -195,6 +197,8 @@ struct Index {
 
   // Called by @Watch when EntryAbility.onForeground bumps appForegroundSeq
   private onForegroundSeqChanged(): void {
+    // setInterval is frozen in background; resync codes immediately on return
+    this.tickOtp();
     if (this.securityMode !== 'off' && this.loggedIn) {
       this.securityLocked = true;
       this.randomizeDecorativeIcons();
@@ -468,10 +472,7 @@ struct Index {
   // ── Lifecycle ───────────────────────────────────────────────────
   aboutToAppear(): void {
     this.loadData();
-    this.timer = setInterval(() => {
-      this.timeLeft_ = timeLeft();
-      if (this.timeLeft_ === 30) this.refreshOtp();
-    }, 1000) as number;
+    this.timer = setInterval(() => this.tickOtp(), 1000) as number;
     this.queryNavSafeArea();
   }
 
@@ -627,7 +628,13 @@ struct Index {
     }
   }
 
+  private tickOtp(): void {
+    this.timeLeft_ = timeLeft();
+    if (currentPeriod() !== this.otpPeriod) this.refreshOtp();
+  }
+
   private refreshOtp(): void {
+    this.otpPeriod = currentPeriod();
     const m: Record<string, OtpPair> = {};
     for (const t of this.tokens) {
       m[t.id] = { current: totp(t.secret, 0), next: totp(t.secret, 1) };

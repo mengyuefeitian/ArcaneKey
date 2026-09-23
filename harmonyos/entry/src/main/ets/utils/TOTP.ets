@@ -97,6 +97,11 @@ export function totp(secret: string, offset: number = 0): string {
   }
 }
 
+// Index of the current 30s TOTP window; changes exactly when codes roll over
+export function currentPeriod(): number {
+  return Math.floor(Date.now() / 30000);
+}
+
 export function timeLeft(): number {
   return 30 - (Math.floor(Date.now() / 1000) % 30);
 }
