@@ -168,7 +168,7 @@ export struct PasswordView {
             Text(e.url).fontSize(12).fontColor(this.c('rgba(238,238,245,0.5)', '#9B8B80'))
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
           }
-        }.alignItems(HorizontalAlign.Start).flexGrow(1)
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Button({ type: ButtonType.Normal }) {
           Image($r('app.media.icon_edit'))
             .width(17).height(17).fillColor(this.accentColor)
@@ -217,7 +217,7 @@ export struct PasswordView {
   @Builder
   deleteAction(e: PasswordEntry) {
     Column() {
-      Text('删除').fontSize(13).fontColor('#ff5a5a')
+      Image($r('app.media.icon_swipe_delete')).width(30).height(30)
     }
     .width(64).height('100%').justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
     .onClick(() => { this.removeEntry(e); })

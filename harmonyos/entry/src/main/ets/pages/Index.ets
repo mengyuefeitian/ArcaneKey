@@ -29,8 +29,8 @@ import {
 } from '../utils/SecurityUtil';
 import { PasswordEntry } from '../model/PasswordEntry';
 import { PasswordView } from '../views/PasswordView';
-import { extractDomain } from '../utils/DomainUtil';
 import { parsePasswordCsv, toCsv } from '../utils/CsvUtil';
+import { classifyPasswordImport, applyPasswordImport, PasswordClassifyResult, PasswordApplyResult, PasswordConflict, PasswordSame } from '../utils/PasswordMerge';
 import { initCloudDB, setCloudUserId, addToken, updateToken, softDeleteToken, restoreToken, sync, startAutoSync, stopAutoSync } from '../utils/SyncUtil';
 
 interface SaveOptions {
@@ -149,6 +149,14 @@ struct Index {
   @State passwords: PasswordEntry[] = [];
   @State pwOpenDomain: string = '';
   @State pwFormOpen: boolean = false;
+
+  // ── Password CSV Import Conflict Modal ──────────────────────────
+  @State showPwConflict: boolean = false;
+  @State pwConflicts: PasswordConflict[] = [];
+  @State pwConflictExisting: PasswordEntry[] = [];
+  @State pwConflictNews: PasswordEntry[] = [];
+  @State pwConflictSames: PasswordSame[] = [];
+  @State pwConflictNextIdSeed: number = 0;
 
   // ── Toast ───────────────────────────────────────────────────────
   @State toastMsg: string = '';
@@ -403,6 +411,11 @@ struct Index {
     // zIndex 999 — delete confirmation dialog can be open on top of EditModal
     if (this.showDeleteConfirm) {
       this.showDeleteConfirm = false;
+      return true;
+    }
+    // zIndex 800 — password CSV import conflict dialog (sits on top of importModal)
+    if (this.showPwConflict) {
+      this.cancelPwConflict();
       return true;
     }
     // zIndex 400 — full-screen modals
@@ -819,51 +832,77 @@ struct Index {
   private mergePasswordCsv(text: string): void {
     const incoming: PasswordEntry[] = parsePasswordCsv(text);
     if (incoming.length === 0) { this.toast('未识别到有效的密码数据'); return; }
-    const keyOf = (e: PasswordEntry): string =>
-      extractDomain(e.url) + ' ' + e.username.trim().toLowerCase();
-    const work: PasswordEntry[] = this.passwords.slice();
-    const idxByKey: Record<string, number> = {};
-    for (let i = 0; i < work.length; i++) { idxByKey[keyOf(work[i])] = i; }
+    const result: PasswordClassifyResult = classifyPasswordImport(this.passwords, incoming);
+    if (result.conflicts.length === 0) {
+      this.commitPasswordImport(this.passwords, result);
+      return;
+    }
+    // 有冲突：暂不写入，弹出确认对话框，等用户选择后再 commit。
+    this.pwConflictExisting = this.passwords;
+    this.pwConflictNews = result.news;
+    this.pwConflictSames = result.sames;
+    this.pwConflictNextIdSeed = result.nextIdSeed;
+    this.pwConflicts = result.conflicts;
+    this.showPwConflict = true;
+  }
 
-    let added = 0;
-    let updated = 0;
-    for (const inc of incoming) {
-      const k = keyOf(inc);
-      const hit = idxByKey[k];
-      if (hit !== undefined) {
-        const x = work[hit];
-        const merged: PasswordEntry = {
-          id: x.id,
-          name: inc.name || x.name,
-          url: inc.url || x.url,
-          username: x.username,
-          password: inc.password || x.password,
-          note: inc.note || x.note,
-          timestamp: new Date().toISOString(),
-        };
-        work[hit] = merged;
-        updated++;
-      } else {
-        if (!this.isMember && work.length >= FREE_PASSWORD_LIMIT) { continue; }
-        const fresh: PasswordEntry = {
-          id: (Date.now() + added).toString(),
-          name: inc.name, url: inc.url, username: inc.username,
-          password: inc.password, note: inc.note,
-          timestamp: new Date().toISOString(),
-        };
-        work.push(fresh);
-        idxByKey[k] = work.length - 1;
-        added++;
-      }
-    }
-    const skipped = incoming.length - added - updated;
-    this.passwords = work;
-    savePasswords(work);
-    if (skipped > 0) {
-      this.toast(`新增 ${added}，更新 ${updated}，${skipped} 条超出免费上限`);
-    } else {
-      this.toast(`新增 ${added}，更新 ${updated}`);
-    }
+  private commitPasswordImport(existing: PasswordEntry[], result: PasswordClassifyResult): void {
+    const applied: PasswordApplyResult = applyPasswordImport(existing, result, this.isMember, FREE_PASSWORD_LIMIT);
+    this.passwords = applied.list;
+    savePasswords(applied.list);
+    this.toast(this.formatPasswordImportToast(applied, false));
+    this.maybeSmartCommentAfterSuccess();
+  }
+
+  // showAppended: 冲突确认弹窗路径始终显示「增加 Z」（即使为 0），
+  // 无冲突路径（旧行为）不显示该字段。
+  private formatPasswordImportToast(applied: PasswordApplyResult, showAppended: boolean): string {
+    let msg = `新增 ${applied.added}，更新 ${applied.updated}`;
+    if (showAppended || applied.appended > 0) { msg += `，增加 ${applied.appended}`; }
+    if (applied.skipped > 0) { msg += `，${applied.skipped} 条超出免费上限`; }
+    return msg;
+  }
+
+  private setPwConflictChoice(index: number, choice: string): void {
+    this.pwConflicts = this.pwConflicts.map((c: PasswordConflict, i: number): PasswordConflict => {
+      if (i !== index) { return c; }
+      return { incoming: c.incoming, targetId: c.targetId, domain: c.domain, username: c.username, choice: choice };
+    });
+  }
+
+  private setAllPwConflictChoices(choice: string): void {
+    this.pwConflicts = this.pwConflicts.map((c: PasswordConflict): PasswordConflict => {
+      return { incoming: c.incoming, targetId: c.targetId, domain: c.domain, username: c.username, choice: choice };
+    });
+  }
+
+  private clearPwConflictState(): void {
+    this.showPwConflict = false;
+    this.pwConflicts = [];
+    this.pwConflictExisting = [];
+    this.pwConflictNews = [];
+    this.pwConflictSames = [];
+    this.pwConflictNextIdSeed = 0;
+  }
+
+  private cancelPwConflict(): void {
+    this.clearPwConflictState();
+    this.toast('已取消导入');
+  }
+
+  private confirmPwConflict(): void {
+    const result: PasswordClassifyResult = {
+      news: this.pwConflictNews,
+      sames: this.pwConflictSames,
+      conflicts: this.pwConflicts,
+      nextIdSeed: this.pwConflictNextIdSeed,
+    };
+    const existing: PasswordEntry[] = this.pwConflictExisting;
+    const applied: PasswordApplyResult = applyPasswordImport(existing, result, this.isMember, FREE_PASSWORD_LIMIT);
+    this.passwords = applied.list;
+    savePasswords(applied.list);
+    this.clearPwConflictState();
+    this.toast(this.formatPasswordImportToast(applied, true));
     this.maybeSmartCommentAfterSuccess();
   }
 
@@ -1876,6 +1915,77 @@ struct Index {
     .position({ x: 0, y: 0 }).zIndex(400)
   }
 
+  // ── Builder: Password CSV Import Conflict Dialog ────────────────
+  @Builder
+  pwConflictModal() {
+    Column() {
+      Column({ space: 4 }) {
+        Text(`发现 ${this.pwConflicts.length} 条密码冲突`)
+          .fontSize(16).fontWeight(700).fontColor(this.c('#eeeef5', '#2C1810'))
+        Text('以下账号已存在但密码不同，请选择处理方式')
+          .fontSize(12).fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).lineHeight(18)
+      }.alignItems(HorizontalAlign.Start).width('100%').margin({ bottom: 14 })
+
+      Row({ space: 10 }) {
+        Button('全部更新').flexGrow(1).height(36).borderRadius(10)
+          .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.04)'))
+          .fontColor(this.c('rgba(238,238,245,0.85)', '#2C1810')).fontSize(13).fontWeight(600)
+          .onClick(() => { this.setAllPwConflictChoices('update'); })
+        Button('全部增加').flexGrow(1).height(36).borderRadius(10)
+          .backgroundColor(this.c('rgba(255,255,255,0.08)', 'rgba(0,0,0,0.04)'))
+          .fontColor(this.c('rgba(238,238,245,0.85)', '#2C1810')).fontSize(13).fontWeight(600)
+          .onClick(() => { this.setAllPwConflictChoices('add'); })
+      }.width('100%').margin({ bottom: 12 })
+
+      List({ space: 10 }) {
+        ForEach(this.pwConflicts, (c: PasswordConflict, index: number) => {
+          ListItem() {
+            Column({ space: 8 }) {
+              Column({ space: 2 }) {
+                Text(c.domain || '(未知域名)').fontSize(14).fontWeight(650).fontColor(this.c('#eeeef5', '#2C1810'))
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                Text(c.username || '(无账号)').fontSize(12).fontColor(this.c('rgba(238,238,245,0.55)', '#6B5B50'))
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+              }.alignItems(HorizontalAlign.Start).width('100%')
+
+              Row({ space: 0 }) {
+                Text('更新密码').fontSize(12).flexGrow(1).textAlign(TextAlign.Center)
+                  .padding({ top: 7, bottom: 7 })
+                  .fontColor(c.choice === 'update' ? '#fff' : this.c('rgba(238,238,245,0.6)', '#6B5B50'))
+                  .backgroundColor(c.choice === 'update' ? this.accentColor : Color.Transparent)
+                  .onClick(() => { this.setPwConflictChoice(index, 'update'); })
+                Text('增加密码').fontSize(12).flexGrow(1).textAlign(TextAlign.Center)
+                  .padding({ top: 7, bottom: 7 })
+                  .fontColor(c.choice === 'add' ? '#fff' : this.c('rgba(238,238,245,0.6)', '#6B5B50'))
+                  .backgroundColor(c.choice === 'add' ? this.accentColor : Color.Transparent)
+                  .onClick(() => { this.setPwConflictChoice(index, 'add'); })
+              }
+              .width('100%').borderRadius(9).clip(true)
+              .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') })
+            }
+            .width('100%').padding(12)
+            .backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(12)
+            .border({ width: 1, color: this.c('rgba(255,255,255,0.05)', '#E8E2D9') })
+          }
+        }, (c: PasswordConflict, index: number) => c.incoming.id + '_' + c.choice)
+      }
+      .width('100%').constraintSize({ maxHeight: 320 }).scrollBar(BarState.Off)
+
+      Row({ space: 10 }) {
+        Button('取消').flexGrow(1).backgroundColor(Color.Transparent)
+          .border({ width: 1, color: this.c('rgba(255,255,255,0.1)', '#E8E2D9') }).borderRadius(12)
+          .fontColor(this.c('rgba(238,238,245,0.6)', '#5C4F43')).fontSize(14)
+          .onClick(() => { this.cancelPwConflict(); })
+        Button('确认导入').flexGrow(1).backgroundColor(this.accentColor).borderRadius(12)
+          .fontColor('#fff').fontSize(14).fontWeight(650)
+          .onClick(() => { this.confirmPwConflict(); })
+      }.width('100%').margin({ top: 14 })
+    }
+    .padding(20).backgroundColor(this.c('#191920', '#FFFFFF')).borderRadius(20).width('88%')
+    .constraintSize({ maxHeight: '80%' })
+    .shadow({ radius: 24, color: 'rgba(0,0,0,0.15)', offsetX: 0, offsetY: 4 })
+  }
+
   // ── Builder: Delete Confirmation ────────────────────────────────
   @Builder
   deleteConfirmDialog() {
@@ -2366,6 +2476,14 @@ struct Index {
         .width('100%').height('100%').backgroundColor('rgba(0,0,0,0.6)')
         .alignItems(HorizontalAlign.Center).justifyContent(FlexAlign.Center)
         .zIndex(999)
+      }
+      if (this.showPwConflict) {
+        Column() {
+          this.pwConflictModal()
+        }
+        .width('100%').height('100%').backgroundColor('rgba(0,0,0,0.6)')
+        .alignItems(HorizontalAlign.Center).justifyContent(FlexAlign.Center)
+        .zIndex(800)
       }
 
       // ── App lock (cold start / return to foreground) ────────────
