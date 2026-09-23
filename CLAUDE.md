@@ -49,7 +49,7 @@ Single-page architecture (`pages/index/index` is the only page). All screens are
 
 ### HarmonyOS App (`harmonyos/`)
 
-ArkTS (HarmonyOS 6.1, API 23) app built with DevEco Studio. Bundle name: `com.example.authenticator`.
+ArkTS (HarmonyOS 6.1.1, API 24) app built with DevEco Studio. Bundle name: `com.example.authenticator`.
 
 - **`entry/src/main/ets/pages/Index.ets`** — root `@Entry @Component`. Holds all `@State`, the 1s `setInterval` TOTP timer, and **all modals inline** (LoginModal, EditModal, BackupModal, ImportModal, ThemePicker, MembershipModal — as `@Builder` functions, not separate files). Bottom nav is a custom floating capsule bar.
 - **`entry/src/main/ets/views/`** — `HomeView.ets`, `ScanView.ets`, `ProfileView.ets`, `FeedbackView.ets` are `@Component` structs, NOT pages. They are conditionally instantiated inside `Index.ets` based on `currentTab`.
@@ -68,7 +68,7 @@ ArkTS (HarmonyOS 6.1, API 23) app built with DevEco Studio. Bundle name: `com.ex
 
 ## CRITICAL: HarmonyOS Development Rules
 
-**This project targets HarmonyOS 6.1 (API 23). ArkTS has near-100% compilation failure when TypeScript patterns are used.**
+**This project targets HarmonyOS 6.1.1 (API 24). ArkTS has near-100% compilation failure when TypeScript patterns are used.**
 
 ### Before Writing Any `.ets` File
 
@@ -84,7 +84,7 @@ ArkTS (HarmonyOS 6.1, API 23) app built with DevEco Studio. Bundle name: `com.ex
 - [ ] All imported types/functions exist in the exact import path used
 - [ ] No anonymous object literal types on decorator fields
 - [ ] `struct` `build()` method uses only ArkUI builder syntax
-- [ ] API Level 23 compatibility verified
+- [ ] API Level 24 compatibility verified
 
 ### API Verification Rules
 
@@ -100,11 +100,11 @@ Before using any HarmonyOS API:
    - https://developer.huawei.com/consumer/cn/doc/harmonyos-references/arkui-ts/
 
 3. **Priority 3: Use site search**
-   - `site:developer.huawei.com API_NAME API 23`
+   - `site:developer.huawei.com API_NAME API 24`
 
 **If API cannot be verified:**
 - Do NOT write production code
-- Use `// TODO: API 23 compatibility requires manual verification`
+- Use `// TODO: API 24 compatibility requires manual verification`
 - Report the uncertainty
 
 ### Build Verification Workflow
@@ -113,7 +113,7 @@ For every task:
 
 1. Analyze project structure
 2. Read existing implementation
-3. Identify SDK version (API 23)
+3. Identify SDK version (API 24)
 4. Create implementation plan
 5. Modify code
 6. Run build
@@ -156,7 +156,7 @@ Verify:
 - [ ] Permission declarations in `module.json5`
 - [ ] Component property signatures match ArkUI spec
 - [ ] Lifecycle method signatures correct
-- [ ] API Level 23 compatibility confirmed
+- [ ] API Level 24 compatibility confirmed
 
 ### Completion Criteria
 
@@ -173,7 +173,7 @@ Task is complete ONLY if:
 ### Forbidden Patterns
 
 Never use:
-- API 24+ only interfaces
+- API 25+ only interfaces
 - Deprecated APIs
 - Android APIs
 - iOS APIs
@@ -221,7 +221,7 @@ When reporting completion always include:
 - **Changes Made**: Summarize implementation
 - **Build Status**: PASS / FAIL
 - **API Verification**: Verified APIs used
-- **API Level Compatibility**: Confirm API 23 compatibility
+- **API Level Compatibility**: Confirm API 24 compatibility
 - **Remaining Issues**: List unresolved items
 
 ---
@@ -302,7 +302,7 @@ No tests, no CI/CD, no linter, no formatter, no package manager, no `.gitignore`
 - `wx.chooseMedia()` — Media selection
 ## HarmonyOS App (`harmonyos/`)
 ### Runtime
-- **Platform:** HarmonyOS 6.1 (API 23)
+- **Platform:** HarmonyOS 6.1.1 (API 24)
 - **Language:** ArkTS (TypeScript-like)
 - **IDE:** DevEco Studio
 - **Bundle ID:** `com.example.authenticator`
