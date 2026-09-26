@@ -1,5 +1,8 @@
 import { common, Want, bundleManager } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
+import promptAction from '@ohos.promptAction';
+
+const SUPPORT_WECHAT_ID: string = 'xiaoanhome925';
 
 const AGREEMENT_TEXT: string = `用户协议
 
@@ -194,6 +197,7 @@ export struct AboutView {
   @Link showAgreement: boolean;
   @Link showPrivacy: boolean;
   @State emailCopied: boolean = false;
+  @State wechatCopied: boolean = false;
   @State versionText: string = '星枢令';
   onClose: () => void = () => {};
 
@@ -227,6 +231,19 @@ export struct AboutView {
       this.emailCopied = true;
       setTimeout(() => { this.emailCopied = false; }, 2000);
     } catch (_) {}
+  }
+
+  private async copyWechat(): Promise<void> {
+    try {
+      const pb = pasteboard.getSystemPasteboard();
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, SUPPORT_WECHAT_ID);
+      await pb.setData(data);
+      this.wechatCopied = true;
+      setTimeout(() => { this.wechatCopied = false; }, 2000);
+      promptAction.showToast({ message: '复制成功，请在微信添加客服反馈', duration: 2500 });
+    } catch (_) {
+      promptAction.showToast({ message: '复制失败，请手动添加客服微信：' + SUPPORT_WECHAT_ID, duration: 2500 });
+    }
   }
 
   build() {
@@ -302,6 +319,22 @@ export struct AboutView {
                     .fontSize(12).fontColor(this.emailCopied ? this.c('rgba(238,238,245,0.65)', '#6B5B50') : this.accentColor)
                 }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
                 .onClick(() => { this.copyEmail(); })
+                Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
+              }
+              // 客服微信
+              Column() {
+                Row({ space: 0 }) {
+                  Stack() { Text('💬').fontSize(16) }
+                    .width(34).height(34).borderRadius(10)
+                    .backgroundColor(this.accentColor + '28').margin({ right: 14 })
+                  Column({ space: 2 }) {
+                    Text('客服微信').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
+                    Text(SUPPORT_WECHAT_ID).fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
+                  }.alignItems(HorizontalAlign.Start).flexGrow(1)
+                  Text(this.wechatCopied ? '已复制 ✓' : '复制')
+                    .fontSize(12).fontColor(this.wechatCopied ? this.c('rgba(238,238,245,0.65)', '#6B5B50') : this.accentColor)
+                }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+                .onClick(() => { this.copyWechat(); })
                 Divider().color(this.c('rgba(255,255,255,0.05)', '#E8E2D9')).strokeWidth(1).margin({ left: 16, right: 16 })
               }
               // 官网
