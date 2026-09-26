@@ -46,6 +46,33 @@ export interface PurchaseTokenResult {
   purchaseOrderId: string;
 }
 
+export interface MemberProductPrice {
+  localPrice: string;
+  originalLocalPrice: string;
+}
+
+// AGC 后台可配置限时促销价（当前价格显示在 localPrice，原价显示在 originalLocalPrice），
+// 界面价格必须以此查询结果为准，禁止硬编码，否则促销期间会出现"标注价与实付价不一致"的审核驳回。
+export async function queryMemberProductPrice(context: common.UIAbilityContext): Promise<MemberProductPrice | null> {
+  try {
+    const products = await iap.queryProducts(context, {
+      productType: iap.ProductType.NONCONSUMABLE,
+      productIds: [MEMBER_PRODUCT_ID],
+    });
+    if (!products || products.length === 0) {
+      return null;
+    }
+    const product = products[0];
+    return {
+      localPrice: product.localPrice ?? '',
+      originalLocalPrice: product.originalLocalPrice ?? '',
+    };
+  } catch (error) {
+    console.error('IAP queryMemberProductPrice failed:', error);
+    return null;
+  }
+}
+
 
 // 沙盒自检：Debug 签名包 + AGC 沙盒测试账号登录时返回 true，用于真机测试排查"是否走了真实扣费"
 export async function checkSandboxStatus(context: common.UIAbilityContext): Promise<void> {

@@ -10,7 +10,7 @@ import { Token, SyncToken, OtpPair, ThemeItem, THEMES, INITIAL_TOKENS, FREE_TOKE
 import { BRAND_ICONS, BrandIconConfig } from '../model/BrandIcons';
 import { totp, timeLeft, currentPeriod } from '../utils/TOTP';
 import { initPreferences, loadTokens, saveTokens, loadTheme, saveTheme, loadMember, saveMember, MemberData, loadLogin, saveLogin, LoginData, loadThemeMode, saveThemeMode, loadCloudSyncEnabled, saveCloudSyncEnabled, SecurityMode, loadSecurityMode, loadLockFallbackEnabled, saveLockFallbackEnabled, loadOpenCount, saveOpenCount, loadPasswords, savePasswords } from '../utils/StorageUtil';
-import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus } from '../utils/IAPUtil';
+import { launchPurchase, restoreOwnedPurchases, acknowledgePurchase, checkSandboxStatus, queryMemberProductPrice } from '../utils/IAPUtil';
 import { iap } from '@kit.IAPKit';
 import { encryptData, decryptData } from '../utils/CryptoUtil';
 import { showAppComment, canSmartPromptComment, markCommentPrompted } from '../utils/CommentUtil';
@@ -115,6 +115,10 @@ struct Index {
   @State boundAccount: string = '';
   @State memberAvatarLoadFailed: boolean = false;
   @State cloudSyncEnabled: boolean = false;
+  // 实付价必须来自 AGC 商品配置（会随限时促销活动变化），不能硬编码，
+  // 否则促销期间界面价与实付价不一致会导致上架审核被拒
+  @State memberLocalPrice: string = `¥${MEMBERSHIP_PRICE.toFixed(2)}`;
+  @State memberOriginalPrice: string = '';
 
   // ── Edit Secret Visibility ──────────────────────────────────────
   @State editSecretVisible: boolean = false;
@@ -487,6 +491,19 @@ struct Index {
     this.loadData();
     this.timer = setInterval(() => this.tickOtp(), 1000) as number;
     this.queryNavSafeArea();
+    this.loadMemberPrice();
+  }
+
+  private async loadMemberPrice(): Promise<void> {
+    const ctx = AppStorage.get<common.UIAbilityContext>('context');
+    if (!ctx) return;
+    const price = await queryMemberProductPrice(ctx);
+    if (price && price.localPrice) {
+      this.memberLocalPrice = price.localPrice;
+      this.memberOriginalPrice = (price.originalLocalPrice && price.originalLocalPrice !== price.localPrice)
+        ? price.originalLocalPrice
+        : '';
+    }
   }
 
   private queryNavSafeArea(): void {
@@ -2076,7 +2093,11 @@ struct Index {
             Column() {
               Text('👑').fontSize(40)
               Row({ space: 4 }) {
-                Text('¥19.90').fontSize(28).fontWeight(800).fontColor(this.c('#eeeef5', '#2C1810'))
+                Text(this.memberLocalPrice).fontSize(28).fontWeight(800).fontColor(this.c('#eeeef5', '#2C1810'))
+                if (this.memberOriginalPrice) {
+                  Text(this.memberOriginalPrice).fontSize(14).decoration({ type: TextDecorationType.LineThrough })
+                    .fontColor(this.c('rgba(238,238,245,0.45)', '#B8ADA0'))
+                }
                 Text('永久会员').fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }
               .alignItems(VerticalAlign.Bottom)
@@ -2333,6 +2354,7 @@ struct Index {
             harmonyLogin: this.harmonyLogin,
             isMember: this.isMember,
             boundAccount: this.boundAccount,
+            memberPriceText: this.memberLocalPrice,
             onLoginTap: () => {
               this.loginPhone = ''; this.loginCode = ''; this.loginCodeSent = false; this.loginCodeCd = 0;
               this.loginNickname = '';

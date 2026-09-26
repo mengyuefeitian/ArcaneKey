@@ -10,6 +10,7 @@ export struct ProfileView {
   @Prop harmonyLogin: boolean = false;
   @Prop isMember: boolean = false;
   @Prop boundAccount: string = '';
+  @Prop memberPriceText: string = '¥19.90';
   onLoginTap: () => void = () => {};
   onBindPhone: () => void = () => {};
   onLogout: () => void = () => {};
@@ -123,7 +124,7 @@ export struct ProfileView {
                 .margin({ right: 14 })
               Column({ space: 2 }) {
                 Text(this.isMember ? '会员特权' : '开通会员').fontSize(15).fontColor(this.c('#eeeef5', '#2C1810')).fontWeight(520)
-                Text(this.isMember ? '永久会员 · 永久有效' : '¥19.90 · 永久会员，无限制添加')
+                Text(this.isMember ? '永久会员 · 永久有效' : `${this.memberPriceText} · 永久会员，无限制添加`)
                   .fontSize(12).fontColor(this.c('rgba(238,238,245,0.65)', '#6B5B50'))
               }.alignItems(HorizontalAlign.Start).flexGrow(1)
               Text('›').fontSize(18).fontColor(this.c('rgba(238,238,245,0.60)', '#6B5B50'))
