@@ -11,6 +11,7 @@ export struct PasswordView {
   @Prop isDark: boolean = true;
   @Prop isMember: boolean = false;
   @Prop loggedIn: boolean = false;
+  @Prop navBottomPad: number = 130;
   @Link passwords: PasswordEntry[];
   @Link openDomain: string;
   onChange: (list: PasswordEntry[]) => void = () => {};
@@ -315,7 +316,7 @@ export struct PasswordView {
           ListItem() { this.entryCard(e) }
           .swipeAction({ end: () => { this.deleteAction(e) } })
         }, (e: PasswordEntry) => e.id + '_' + e.name + '_' + e.username + '_' + e.password)
-        ListItem() { Column().height(96) }
+        ListItem() { Column().height(this.navBottomPad) }
       }
       .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
     }
@@ -381,7 +382,7 @@ export struct PasswordView {
               ListItem() { this.entryCard(e) }
               .swipeAction({ end: () => { this.deleteAction(e) } })
             }, (e: PasswordEntry) => e.id + '_' + e.name + '_' + e.username + '_' + e.password)
-            ListItem() { Column().height(96) }
+            ListItem() { Column().height(this.navBottomPad) }
           }
           .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
         } else {
@@ -416,7 +417,7 @@ export struct PasswordView {
               }
               .padding({ bottom: 10 })
             }, (g: PasswordGroup) => g.domain + '_' + g.entries.length)
-            ListItem() { Column().height(96) }
+            ListItem() { Column().height(this.navBottomPad) }
           }
           .width('100%').flexGrow(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Off)
         }

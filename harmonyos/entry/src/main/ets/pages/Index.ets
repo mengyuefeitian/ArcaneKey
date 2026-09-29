@@ -2322,6 +2322,7 @@ struct Index {
             onNavShow: () => { this.navVisible = true; },
             isMember: this.isMember,
             loggedIn: this.loggedIn,
+            navBottomPad: 46 + this.navSafeBottom + 24 + 16 + 44, // +44: Tabs 顶部 padding 使列表视口底部下移
             onSync: (done: () => void) => {
               this.cloudRestore().finally(done);
             },
@@ -2418,6 +2419,7 @@ struct Index {
             isDark: this.isDark,
             isMember: this.isMember,
             loggedIn: this.loggedIn,
+            navBottomPad: 46 + this.navSafeBottom + 24 + 16 + 44, // +44: Tabs 顶部 padding 使列表视口底部下移
             passwords: $passwords,
             openDomain: $pwOpenDomain,
             formOpen: $pwFormOpen,

@@ -10,6 +10,7 @@ export struct HomeView {
   @Prop isDark: boolean = true;
   @Prop isMember: boolean = false;
   @Prop loggedIn: boolean = false;
+  @Prop navBottomPad: number = 130;
   @Link searchQ: string;
   onEdit: (tok: Token) => void = () => {};
   onCopy: (code: string, brand: string) => void = () => {};
@@ -111,7 +112,7 @@ export struct HomeView {
             }
             .swipeAction({ end: () => { this.DeleteAction(tok) } })
           }, (tok: Token) => tok.id + '_' + tok.brand + '_' + tok.account)
-          ListItem() { Column().height(96) }
+          ListItem() { Column().height(this.navBottomPad) }
         }
         .width('100%')
         .flexGrow(1)
